@@ -613,8 +613,6 @@
                     var { error: insertErr } = await sb.from('vra_data').insert(batch);
                     if (insertErr) throw new Error(insertErr.message);
                 }
-                btn.style.display = 'none';
-                fileInput.value = '';
             }
         })();
     </script>
