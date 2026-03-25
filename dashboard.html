@@ -1548,9 +1548,7 @@
                 { key: 'ordered_revenue', label: 'Best.-Umsatz' },
                 { key: 'revenue_share', label: 'Anteil %' },
                 { key: 'ordered_units', label: 'Einheiten' },
-                { key: 'shipped_revenue', label: 'Vers.-Umsatz' },
-                { key: 'margin', label: 'Marge' },
-                { key: 'customer_returns', label: 'Rücksendungen' }
+                { key: 'shipped_revenue', label: 'Vers.-Umsatz' }
             ];
             if (hasCompare) {
                 var mOpts = availableMonths.map(function(m) {
@@ -1574,8 +1572,6 @@
                             '<option value="ordered_revenue"' + (rankSortCol === 'ordered_revenue' ? ' selected' : '') + '>Nach Umsatz</option>' +
                             '<option value="ordered_units"' + (rankSortCol === 'ordered_units' ? ' selected' : '') + '>Nach Einheiten</option>' +
                             '<option value="shipped_revenue"' + (rankSortCol === 'shipped_revenue' ? ' selected' : '') + '>Nach Vers.-Umsatz</option>' +
-                            '<option value="margin"' + (rankSortCol === 'margin' ? ' selected' : '') + '>Nach Marge</option>' +
-                            '<option value="customer_returns"' + (rankSortCol === 'customer_returns' ? ' selected' : '') + '>Nach Rücksendungen</option>' +
                         '</select>' +
                         '<button class="btn-export" onclick="exportRanking()">&#8681; Export</button>' +
                     '</div>' +
@@ -1603,8 +1599,6 @@
                     '<td>' + fmtPct.format(r.revenue_share) + ' %</td>' +
                     '<td>' + formatInt(r.ordered_units) + '</td>' +
                     '<td>' + formatEuro(r.shipped_revenue) + '</td>' +
-                    '<td style="' + (r.margin >= 20 ? 'color:var(--success);font-weight:600;' : r.margin < 10 ? 'color:var(--error);font-weight:600;' : '') + '">' + fmtPct.format(r.margin) + ' %</td>' +
-                    '<td>' + formatInt(r.customer_returns) + '</td>' +
                     (hasCompare ? '<td style="font-weight:600;' + (r.delta_revenue_pct > 0 ? 'color:var(--success);' : r.delta_revenue_pct < 0 ? 'color:var(--error);' : '') + '">' + (r.delta_revenue_pct > 0 ? '+' : '') + fmtPct.format(r.delta_revenue_pct) + ' %</td>' : '') +
                     '</tr>';
             });
@@ -1657,9 +1651,13 @@
 
         function exportRanking() {
             var rows = (window._rankExportRows || []).map(function(r) {
-                return [r.asin, r.title, r.brand, r.ordered_revenue, Math.round(r.revenue_share * 10) / 10, r.ordered_units, r.shipped_revenue, Math.round(r.margin * 10) / 10, r.customer_returns];
+                var row = [r.asin, r.title, r.brand, r.ordered_revenue, Math.round(r.revenue_share * 10) / 10, r.ordered_units, r.shipped_revenue];
+                if (r.delta_revenue_pct !== undefined) row.push(Math.round(r.delta_revenue_pct * 10) / 10);
+                return row;
             });
-            exportToExcel(rows, ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Anteil %', 'Einheiten', 'Vers.-Umsatz', 'Marge %', 'Rücksendungen'], 'Produkt-Ranking', 'Produkt-Ranking');
+            var headers = ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Anteil %', 'Einheiten', 'Vers.-Umsatz'];
+            if (window._compareEnabled) headers.push('Δ Umsatz %');
+            exportToExcel(rows, headers, 'Produkt-Ranking', 'Produkt-Ranking');
         }
 
         /* ── E. Vorjahresvergleich (YoY) ── */
