@@ -136,7 +136,7 @@
             <ol>
                 <li><strong>Kunde anlegen:</strong> Gehe zu <a href="clients.html">Kunden</a> und erstelle einen neuen Kunden mit Name und Marketplace.</li>
                 <li><strong>Report herunterladen:</strong> Lade den Retail Analytics Report aus deinem Amazon Vendor Central als Excel-Datei (.xlsx) herunter (siehe oben).</li>
-                <li><strong>Report hochladen:</strong> Gehe zu <a href="upload.html">Upload</a>, wähle den Kunden aus und lade die Excel-Datei hoch. Der Zeitraum wird automatisch aus den Metadaten erkannt. Du kannst mehrere Dateien gleichzeitig hochladen.</li>
+                <li><strong>Report hochladen:</strong> Gehe zu <a href="upload.html">Upload</a>, wähle den Kunden aus und lade die Excel-Datei hoch. Der Zeitraum wird automatisch aus den Metadaten erkannt. Du kannst mehrere Dateien gleichzeitig hochladen (Multi-File Upload). Duplikate werden mit einer Warnung angezeigt. Fehlende Monate zwischen den hochgeladenen Reports werden ebenfalls gemeldet.</li>
                 <li><strong>Analysieren:</strong> Im <a href="dashboard.html">Dashboard</a> siehst du KPIs, Trends, Produkt-Rankings und Monatsvergleiche.</li>
             </ol>
         </div>
@@ -144,14 +144,14 @@
         <div class="help-card">
             <h3>Features im Dashboard</h3>
             <ul>
-                <li><strong>Übersicht:</strong> KPI-Cards mit Bestellungsumsatz, Einheiten, Versandumsatz, Versandeinheiten und Rücksendungen. Flexibler Zeitraum-Vergleich mit frei wählbaren Perioden. Darunter die Monatsübersicht als Tabelle mit allen KPIs pro Monat und prozentualer Veränderung.</li>
-                <li><strong>Trend-Analyse:</strong> Balken-/Linien-Chart mit Bestellungsumsatz und bestellten Einheiten über alle ausgewählten Monate.</li>
-                <li><strong>Neue & entfallene ASINs:</strong> Erkennung von ASINs die im letzten Monat neu hinzugekommen sind oder im Vergleich zum Vormonat weggefallen sind.</li>
-                <li><strong>Produkt-Ranking:</strong> Sortierbare Tabelle aller ASINs mit Umsatz, Einheiten, Umsatzanteil und Rücksendungen. Suche nach ASIN, Titel oder Marke. Export als Excel.</li>
-                <li><strong>Top Movers:</strong> Vergleich zweier Monate mit Gewinnern und Verlierern nach Umsatz, Einheiten oder Rücksendungen. Visualisierung als Balkendiagramm und vollständige Vergleichstabelle.</li>
-                <li><strong>Vorjahresvergleich:</strong> Vergleich eines Monats mit dem gleichen Monat im Vorjahr. KPIs und ASIN-Level Vergleichstabelle.</li>
+                <li><strong>Übersicht:</strong> KPI-Cards mit Bestellungsumsatz, Einheiten, Versandumsatz, Versandeinheiten und Rücksendungen. Frei wählbarer Zeitraum über Von-Bis Dropdowns. Optionaler Vergleichszeitraum mit prozentualer Veränderung (&Delta;%). Trend-Chart mit Balken/Linien. Darunter die Monatsübersicht als Tabelle mit allen KPIs pro Monat.</li>
+                <li><strong>Produkt-Ranking:</strong> Sortierbare Tabelle aller ASINs mit Umsatz, Einheiten, Umsatzanteil (%), Marge und Rücksendungen. Filterbar nach ASIN, Titel oder Marke. Bei aktivem Vergleichszeitraum wird die prozentuale Umsatzveränderung (&Delta; Umsatz %) angezeigt. Export als Excel.</li>
+                <li><strong>Top Movers:</strong> Vergleich zweier frei wählbarer Monate (Monat A / Monat B). Auswahl der Anzahl (Top N) und Metrik (Umsatz, Einheiten, Rücksendungen). Gewinner und Verlierer als Balkendiagramm. Darunter die vollständige Vergleichstabelle aller ASINs.</li>
+                <li><strong>Vorjahresvergleich:</strong> Vergleich eines Monats mit dem gleichen Monat im Vorjahr. KPI-Übersicht und ASIN-Level Vergleichstabelle.</li>
                 <li><strong>Brand-Analyse:</strong> Gruppierung aller Produkte nach Marke. Umsatzanteile, Trend-Chart der Top 5 Brands, und Drill-down auf einzelne Brand-Produkte.</li>
-                <li><strong>Produkt-Details:</strong> Klick auf eine ASIN öffnet die Detailseite mit monatlicher Entwicklung des einzelnen Produkts.</li>
+                <li><strong>Sortimentsänderungen:</strong> Erkennung von neuen ASINs (im aktuellen Zeitraum vorhanden, im Vormonat nicht) und entfallenen ASINs (im Vormonat vorhanden, im aktuellen Zeitraum nicht mehr).</li>
+                <li><strong>Produktdetail-Seite:</strong> Klick auf eine ASIN öffnet die Detailseite mit monatlicher Entwicklung des einzelnen Produkts inkl. aller KPIs im Zeitverlauf.</li>
+                <li><strong>Excel-Export:</strong> Produkt-Ranking und andere Tabellen können als Excel-Datei (.xlsx) exportiert werden.</li>
             </ul>
         </div>
 
@@ -241,8 +241,8 @@
                     <span class="faq-toggle">+</span>
                 </div>
                 <div class="faq-a">
-                    Ja. Im Dashboard kannst du über die Zeitraum-Checkboxen beliebig viele Monate aus- oder abwählen.
-                    Die KPIs und das Produkt-Ranking werden dann über den gesamten Zeitraum aggregiert.
+                    Ja. Im Dashboard kannst du über die Von-Bis Dropdowns einen beliebigen Zeitraum auswählen.
+                    Die KPIs und das Produkt-Ranking werden dann über den gesamten ausgewählten Zeitraum aggregiert.
                 </div>
             </div>
             <div class="divider"></div>
