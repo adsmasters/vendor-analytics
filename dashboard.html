@@ -1553,10 +1553,14 @@
                 { key: 'customer_returns', label: 'Rücksendungen' }
             ];
             if (hasCompare) {
-                var compFromOpt = monthOptions.find(function(o) { return o.value === window._compareFrom; });
-                var compToOpt = monthOptions.find(function(o) { return o.value === window._compareTo; });
-                var mainFromOpt = monthOptions.find(function(o) { return o.value === window._periodFrom; });
-                var mainToOpt = monthOptions.find(function(o) { return o.value === window._periodTo; });
+                var mOpts = availableMonths.map(function(m) {
+                    var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                    return { value: m, label: ps ? monthLabel(ps.period_start) : m };
+                });
+                var compFromOpt = mOpts.find(function(o) { return o.value === window._compareFrom; });
+                var compToOpt = mOpts.find(function(o) { return o.value === window._compareTo; });
+                var mainFromOpt = mOpts.find(function(o) { return o.value === window._periodFrom; });
+                var mainToOpt = mOpts.find(function(o) { return o.value === window._periodTo; });
                 var mainLabel = window._periodFrom === window._periodTo ? (mainFromOpt ? mainFromOpt.label : '') : (mainFromOpt ? mainFromOpt.label : '') + '–' + (mainToOpt ? mainToOpt.label : '');
                 var compLabel = window._compareFrom === window._compareTo ? (compFromOpt ? compFromOpt.label : '') : (compFromOpt ? compFromOpt.label : '') + '–' + (compToOpt ? compToOpt.label : '');
                 cols.push({ key: 'delta_revenue_pct', label: 'Δ % (' + mainLabel + ' vs. ' + compLabel + ')' });
