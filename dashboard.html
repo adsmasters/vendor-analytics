@@ -157,7 +157,7 @@
             padding: 16px; text-align: center;
         }
         .kpi-label {
-            font-size: 11px; color: var(--text-secondary); text-transform: uppercase;
+            font-size: 11px; color: var(--text-primary); text-transform: uppercase;
             letter-spacing: 0.5px; margin-bottom: 6px;
             display: flex; align-items: center; justify-content: center; gap: 4px;
         }
@@ -851,82 +851,56 @@
         function renderKPIs() {
             var el = document.getElementById('kpiSection');
             if (!el) return;
-            if (availableMonths.length === 0) { el.innerHTML = ''; return; }
+            if (selectedMonths.length === 0) { el.innerHTML = ''; return; }
 
-            // Defaults
-            if (!kpiRangeFrom || availableMonths.indexOf(kpiRangeFrom) === -1) kpiRangeFrom = availableMonths[0];
-            if (!kpiRangeTo || availableMonths.indexOf(kpiRangeTo) === -1) kpiRangeTo = availableMonths[availableMonths.length - 1];
-
-            // Build month options
-            var monthOpts = availableMonths.map(function(m) {
-                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
-                var lbl = ps ? monthLabel(ps.period_start) : m;
-                return { value: m, label: lbl };
+            // Use the main period selector (selectedMonths from Von-Bis dropdowns)
+            var curr = { ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_units: 0, customer_returns: 0 };
+            selectedMonths.forEach(function(m) {
+                var data = getDataForMonth(m);
+                data.forEach(function(r) {
+                    curr.ordered_revenue += r.ordered_revenue || 0;
+                    curr.ordered_units += r.ordered_units || 0;
+                    curr.shipped_revenue += r.shipped_revenue || 0;
+                    curr.shipped_units += r.shipped_units || 0;
+                    curr.customer_returns += r.customer_returns || 0;
+                });
             });
 
-            function makeSelect(id, selected, onchange) {
-                return '<select class="filter-select" id="' + id + '" onchange="' + onchange + '">' +
-                    monthOpts.map(function(o) {
-                        return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
-                    }).join('') + '</select>';
-            }
-
-            // Aggregate data for range
-            function sumRange(fromMonth, toMonth) {
-                var result = { ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_units: 0, customer_returns: 0 };
-                availableMonths.forEach(function(m) {
-                    if (m >= fromMonth && m <= toMonth) {
-                        var data = getDataForMonth(m);
-                        data.forEach(function(r) {
-                            result.ordered_revenue += r.ordered_revenue || 0;
-                            result.ordered_units += r.ordered_units || 0;
-                            result.shipped_revenue += r.shipped_revenue || 0;
-                            result.shipped_units += r.shipped_units || 0;
-                            result.customer_returns += r.customer_returns || 0;
-                        });
-                    }
-                });
-                return result;
-            }
-
-            var curr = sumRange(kpiRangeFrom, kpiRangeTo);
+            // Compare with previous period of same length
+            var periodLength = selectedMonths.length;
+            var firstIdx = availableMonths.indexOf(selectedMonths[0]);
             var comp = null;
-            if (kpiCompareEnabled && kpiCompareFrom && kpiCompareTo) {
-                comp = sumRange(kpiCompareFrom, kpiCompareTo);
+            if (firstIdx >= periodLength) {
+                comp = { ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_units: 0, customer_returns: 0 };
+                for (var ci = 0; ci < periodLength; ci++) {
+                    var compMonth = availableMonths[firstIdx - periodLength + ci];
+                    var compData = getDataForMonth(compMonth);
+                    compData.forEach(function(r) {
+                        comp.ordered_revenue += r.ordered_revenue || 0;
+                        comp.ordered_units += r.ordered_units || 0;
+                        comp.shipped_revenue += r.shipped_revenue || 0;
+                        comp.shipped_units += r.shipped_units || 0;
+                        comp.customer_returns += r.customer_returns || 0;
+                    });
+                }
             }
 
-            // Range labels
-            var fromLabel = monthOpts.find(function(o) { return o.value === kpiRangeFrom; });
-            var toLabel = monthOpts.find(function(o) { return o.value === kpiRangeTo; });
-            var rangeStr = kpiRangeFrom === kpiRangeTo ? (fromLabel ? fromLabel.label : '') : (fromLabel ? fromLabel.label : '') + ' – ' + (toLabel ? toLabel.label : '');
+            // Labels
+            var monthOpts = availableMonths.map(function(m) {
+                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                return { value: m, label: ps ? monthLabel(ps.period_start) : m };
+            });
+            var fromOpt = monthOpts.find(function(o) { return o.value === selectedMonths[0]; });
+            var toOpt = monthOpts.find(function(o) { return o.value === selectedMonths[selectedMonths.length - 1]; });
+            var rangeStr = selectedMonths.length === 1 ? (fromOpt ? fromOpt.label : '') : (fromOpt ? fromOpt.label : '') + ' – ' + (toOpt ? toOpt.label : '');
             var compRangeStr = '';
-            if (kpiCompareEnabled && kpiCompareFrom && kpiCompareTo) {
-                var compFromLabel = monthOpts.find(function(o) { return o.value === kpiCompareFrom; });
-                var compToLabel = monthOpts.find(function(o) { return o.value === kpiCompareTo; });
-                compRangeStr = kpiCompareFrom === kpiCompareTo ? (compFromLabel ? compFromLabel.label : '') : (compFromLabel ? compFromLabel.label : '') + ' – ' + (compToLabel ? compToLabel.label : '');
+            if (comp && firstIdx >= periodLength) {
+                var compFromOpt = monthOpts.find(function(o) { return o.value === availableMonths[firstIdx - periodLength]; });
+                var compToOpt = monthOpts.find(function(o) { return o.value === availableMonths[firstIdx - 1]; });
+                compRangeStr = periodLength === 1 ? (compFromOpt ? compFromOpt.label : '') : (compFromOpt ? compFromOpt.label : '') + ' – ' + (compToOpt ? compToOpt.label : '');
             }
 
-            // Controls
-            var html = '<div class="section-card"><div class="section-body">' +
-                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;">' +
-                    '<span style="font-size:13px;font-weight:600;">Zeitraum:</span>' +
-                    makeSelect('kpiFrom', kpiRangeFrom, 'kpiChangeFrom(this.value)') +
-                    '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
-                    makeSelect('kpiTo', kpiRangeTo, 'kpiChangeTo(this.value)') +
-                    '<label style="display:flex;align-items:center;gap:4px;margin-left:16px;cursor:pointer;font-size:13px;">' +
-                        '<input type="checkbox" id="kpiCompareCheck" onchange="kpiToggleCompare(this.checked)"' + (kpiCompareEnabled ? ' checked' : '') + '>' +
-                        ' Vergleichen mit:' +
-                    '</label>';
-
-            if (kpiCompareEnabled) {
-                if (!kpiCompareFrom || availableMonths.indexOf(kpiCompareFrom) === -1) kpiCompareFrom = availableMonths[0];
-                if (!kpiCompareTo || availableMonths.indexOf(kpiCompareTo) === -1) kpiCompareTo = availableMonths[Math.min(availableMonths.length - 1, availableMonths.indexOf(kpiRangeFrom) - 1 >= 0 ? availableMonths.indexOf(kpiRangeFrom) - 1 : 0)];
-                html += makeSelect('kpiCompFrom', kpiCompareFrom, 'kpiChangeCompFrom(this.value)') +
-                    '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
-                    makeSelect('kpiCompTo', kpiCompareTo, 'kpiChangeCompTo(this.value)');
-            }
-
-            html += '</div>';
+            var html = '<div class="section-card"><div class="section-body">';
 
             // KPI Cards
             var kpis = [
@@ -968,11 +942,6 @@
             el.innerHTML = html;
         }
 
-        window.kpiChangeFrom = function(val) { kpiRangeFrom = val; renderKPIs(); initInfoIcons(); };
-        window.kpiChangeTo = function(val) { kpiRangeTo = val; renderKPIs(); initInfoIcons(); };
-        window.kpiToggleCompare = function(checked) { kpiCompareEnabled = checked; renderKPIs(); initInfoIcons(); };
-        window.kpiChangeCompFrom = function(val) { kpiCompareFrom = val; renderKPIs(); initInfoIcons(); };
-        window.kpiChangeCompTo = function(val) { kpiCompareTo = val; renderKPIs(); initInfoIcons(); };
 
         /* ── B. Trend Chart ── */
         function renderTrendSection() {
