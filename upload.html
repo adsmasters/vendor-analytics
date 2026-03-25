@@ -175,7 +175,7 @@
         </div>
 
         <div class="dropzone" id="dropzone">
-            <div class="dropzone-icon">\uD83D\uDCC4</div>
+            <div class="dropzone-icon">📄</div>
             <div class="dropzone-text">Excel-Datei hierher ziehen oder klicken</div>
             <div class="dropzone-hint">.xlsx oder .xls</div>
         </div>
@@ -521,6 +521,7 @@
                         uploaded++;
                     } catch (e) {
                         errors++;
+                        showStatus('Fehler bei ' + pf.name + ': ' + e.message, 'error');
                     }
                     progressFill.style.width = Math.round(((fi + 1) / totalFiles) * 100) + '%';
                 }
