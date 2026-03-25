@@ -698,47 +698,14 @@
                 return '<option value="' + o.value + '"' + (o.value === window._periodTo ? ' selected' : '') + '>' + o.label + '</option>';
             }).join('');
 
-            // Detect available years for quick-select buttons
-            var availYears = [];
-            availableMonths.forEach(function(m) {
-                var y = parseInt(m.substring(0, 4));
-                if (availYears.indexOf(y) < 0) availYears.push(y);
-            });
-            availYears.sort();
-
-            var quickBtns = '';
-            availYears.forEach(function(year) {
-                var quarters = [
-                    { label: 'Q1 ' + year, from: year + '-01', to: year + '-03' },
-                    { label: 'Q2 ' + year, from: year + '-04', to: year + '-06' },
-                    { label: 'Q3 ' + year, from: year + '-07', to: year + '-09' },
-                    { label: 'Q4 ' + year, from: year + '-10', to: year + '-12' },
-                    { label: 'H1 ' + year, from: year + '-01', to: year + '-06' },
-                    { label: 'H2 ' + year, from: year + '-07', to: year + '-12' },
-                    { label: '' + year, from: year + '-01', to: year + '-12' }
-                ];
-                quarters.forEach(function(q) {
-                    // Check if any months in this range exist
-                    var hasData = availableMonths.some(function(m) { return m >= q.from && m <= q.to; });
-                    if (!hasData) return;
-                    var isActive = window._periodFrom >= q.from && window._periodTo <= q.to &&
-                        window._periodFrom === availableMonths.find(function(m) { return m >= q.from; }) &&
-                        window._periodTo === availableMonths.filter(function(m) { return m <= q.to; }).pop();
-                    quickBtns += '<button class="period-action-btn' + (isActive ? ' active' : '') + '" onclick="setPeriodRange(\'' + q.from + '\',\'' + q.to + '\')">' + q.label + '</button>';
-                });
-            });
-
             var periodHtml = '<div style="margin-bottom:24px;">' +
-                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
                 '<span style="font-size:11px;color:var(--text-primary);text-transform:uppercase;letter-spacing:0.3px;font-weight:600;">Zeitraum</span>' +
                 '<select class="filter-select" onchange="changePeriodFrom(this.value)">' + fromOpts + '</select>' +
                 '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
                 '<select class="filter-select" onchange="changePeriodTo(this.value)">' + toOpts + '</select>' +
-                '<span style="font-size:12px;color:var(--text-secondary);">' + selectedMonths.length + ' von ' + availableMonths.length + ' Monaten</span>' +
-                '</div>' +
-                '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
                 '<button class="period-action-btn" onclick="selectAllMonths()">Alle</button>' +
-                quickBtns +
+                '<span style="font-size:12px;color:var(--text-secondary);">' + selectedMonths.length + ' von ' + availableMonths.length + ' Monaten</span>' +
                 '</div></div>';
 
             // Tab bar
