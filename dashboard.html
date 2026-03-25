@@ -1553,7 +1553,13 @@
                 { key: 'customer_returns', label: 'Rücksendungen' }
             ];
             if (hasCompare) {
-                cols.push({ key: 'delta_revenue_pct', label: 'Δ Umsatz %' });
+                var compFromOpt = monthOptions.find(function(o) { return o.value === window._compareFrom; });
+                var compToOpt = monthOptions.find(function(o) { return o.value === window._compareTo; });
+                var mainFromOpt = monthOptions.find(function(o) { return o.value === window._periodFrom; });
+                var mainToOpt = monthOptions.find(function(o) { return o.value === window._periodTo; });
+                var mainLabel = window._periodFrom === window._periodTo ? (mainFromOpt ? mainFromOpt.label : '') : (mainFromOpt ? mainFromOpt.label : '') + '–' + (mainToOpt ? mainToOpt.label : '');
+                var compLabel = window._compareFrom === window._compareTo ? (compFromOpt ? compFromOpt.label : '') : (compFromOpt ? compFromOpt.label : '') + '–' + (compToOpt ? compToOpt.label : '');
+                cols.push({ key: 'delta_revenue_pct', label: 'Δ % (' + mainLabel + ' vs. ' + compLabel + ')' });
             }
 
             var html = '<div class="table-section">' +
