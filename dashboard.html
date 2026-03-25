@@ -528,6 +528,7 @@
         var yoyMonth = null;
 
         /* ── Formatters ── */
+        var activeCurrency = 'EUR';
         var fmtCurrency = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
         var fmtInt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
         var fmtDec = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -636,6 +637,17 @@
 
             var res = await sb.from('vra_reports').select('*').eq('client_id', selectedClientId).order('period_start', { ascending: true });
             reports = res.data || [];
+
+            // Detect currency from reports
+            var detectedCurrency = 'EUR';
+            for (var ci = 0; ci < reports.length; ci++) {
+                if (reports[ci].currency && reports[ci].currency !== 'EUR') {
+                    detectedCurrency = reports[ci].currency;
+                    break;
+                }
+            }
+            activeCurrency = detectedCurrency;
+            fmtCurrency = new Intl.NumberFormat('de-DE', { style: 'currency', currency: activeCurrency });
 
             if (reports.length === 0) {
                 renderShell();

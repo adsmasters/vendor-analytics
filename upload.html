@@ -391,7 +391,8 @@
                     var fileMeta = {
                         periodStart: periodStart,
                         periodEnd: periodEnd,
-                        company: meta['Unternehmen'] || meta['Distributor'] || '',
+                        company: meta['Unternehmen'] || meta['Businesses'] || meta['Distributor'] || '',
+                        currency: meta['Währung'] || meta['Currency'] || 'EUR',
                         overlapStatus: 'checking'
                     };
 
@@ -549,7 +550,7 @@
                             await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingId);
                         }
 
-                        await doUploadSingle(clientId, pStart, pEnd, existingId, pf.data);
+                        await doUploadSingle(clientId, pStart, pEnd, existingId, pf.data, pf.meta.currency);
                         uploaded++;
                     } catch (e) {
                         errors++;
@@ -604,14 +605,17 @@
                 setTimeout(function() { progressBar.style.display = 'none'; }, 2000);
             });
 
-            async function doUploadSingle(clientId, pStart, pEnd, existingReportId, rows) {
+            async function doUploadSingle(clientId, pStart, pEnd, existingReportId, rows, currency) {
                 var reportId = existingReportId;
 
-                if (!existingReportId) {
+                if (existingReportId) {
+                    await sb.from('vra_reports').update({ currency: currency || 'EUR' }).eq('id', existingReportId);
+                } else {
                     var { data: rep, error: repErr } = await sb.from('vra_reports').insert({
                         client_id: clientId,
                         period_start: pStart,
-                        period_end: pEnd
+                        period_end: pEnd,
+                        currency: currency || 'EUR'
                     }).select('id').single();
 
                     if (repErr) throw new Error(repErr.message);
