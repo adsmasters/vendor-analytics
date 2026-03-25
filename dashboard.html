@@ -748,7 +748,8 @@
                 { id: 'ranking', label: 'Produkt-Ranking' },
                 { id: 'movers', label: 'Top Movers' },
                 { id: 'yoy', label: 'Vorjahresvergleich' },
-                { id: 'brand', label: 'Brand-Analyse' }
+                { id: 'brand', label: 'Brand-Analyse' },
+                { id: 'changes', label: 'Sortimentsänderungen' }
             ];
             var tabBarHtml = '<div class="tab-bar">';
             tabs.forEach(function(t) {
@@ -761,8 +762,6 @@
                     '<div id="kpiSection"></div>' +
                     '<div id="trendSection"></div>' +
                     '<div id="overviewTableSection"></div>' +
-                    '<div id="newAsinsSection"></div>' +
-                    '<div id="discontinuedAsinsSection"></div>' +
                 '</div>' +
                 '<div id="tabRanking" class="tab-content' + (activeTab === 'ranking' ? ' active' : '') + '">' +
                     '<div id="rankingSection"></div>' +
@@ -775,6 +774,10 @@
                 '</div>' +
                 '<div id="tabBrand" class="tab-content' + (activeTab === 'brand' ? ' active' : '') + '">' +
                     '<div id="brandSection"></div>' +
+                '</div>' +
+                '<div id="tabChanges" class="tab-content' + (activeTab === 'changes' ? ' active' : '') + '">' +
+                    '<div id="newAsinsSection"></div>' +
+                    '<div id="discontinuedAsinsSection"></div>' +
                 '</div>';
 
             renderActiveTab();
@@ -793,13 +796,14 @@
         }
 
         function getTabLabel(id) {
-            var map = { overview: 'Übersicht', ranking: 'Produkt-Ranking', movers: 'Top Movers', yoy: 'Vorjahresvergleich', brand: 'Brand-Analyse' };
+            var map = { overview: 'Übersicht', ranking: 'Produkt-Ranking', movers: 'Top Movers', yoy: 'Vorjahresvergleich', brand: 'Brand-Analyse', changes: 'Sortimentsänderungen' };
             return map[id] || id;
         }
 
         function renderActiveTab() {
             switch (activeTab) {
-                case 'overview': renderKPIs(); renderTrendSection(); renderOverviewTable(); renderNewAsins(); renderDiscontinuedAsins(); break;
+                case 'overview': renderKPIs(); renderTrendSection(); renderOverviewTable(); break;
+                case 'changes': renderNewAsins(); renderDiscontinuedAsins(); break;
                 case 'ranking': renderRanking(); break;
                 case 'movers': renderTopMovers(); break;
                 case 'yoy': renderYoYSection(); break;
