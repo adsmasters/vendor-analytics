@@ -411,6 +411,7 @@
                 var el = document.getElementById('statusMsg');
                 el.textContent = msg;
                 el.className = 'status-msg ' + type;
+                el.style.display = 'block';
             }
             function hideStatus() {
                 document.getElementById('statusMsg').className = 'status-msg';
