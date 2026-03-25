@@ -482,11 +482,10 @@
         // Top Movers state
         var moverTopN = 10;
         var moverMetric = 'ordered_revenue';
-
-        // Comparison table state
-        var compareMonthA = null;
-        var compareMonthB = null;
-        var compareSortCol = 'delta_rev';
+        var moverMonthA = null; // current/latest month
+        var moverMonthB = null; // previous month
+        var moverSortCol = 'deltaAbs';
+        var moverSortDir = -1;
         var compareSortDir = 'desc';
 
         // Brand state
@@ -682,7 +681,6 @@
                 { id: 'overview', label: 'Übersicht' },
                 { id: 'ranking', label: 'Produkt-Ranking' },
                 { id: 'movers', label: 'Top Movers' },
-                { id: 'compare', label: 'Monatsvergleich' },
                 { id: 'yoy', label: 'Vorjahresvergleich' },
                 { id: 'brand', label: 'Brand-Analyse' }
             ];
@@ -702,9 +700,6 @@
                 '</div>' +
                 '<div id="tabMovers" class="tab-content' + (activeTab === 'movers' ? ' active' : '') + '">' +
                     '<div id="topMoverSection"></div>' +
-                '</div>' +
-                '<div id="tabCompare" class="tab-content' + (activeTab === 'compare' ? ' active' : '') + '">' +
-                    '<div id="compareSection"></div>' +
                 '</div>' +
                 '<div id="tabYoy" class="tab-content' + (activeTab === 'yoy' ? ' active' : '') + '">' +
                     '<div id="yoySection"></div>' +
@@ -729,7 +724,7 @@
         }
 
         function getTabLabel(id) {
-            var map = { overview: 'Übersicht', ranking: 'Produkt-Ranking', movers: 'Top Movers', compare: 'Monatsvergleich', yoy: 'Vorjahresvergleich', brand: 'Brand-Analyse' };
+            var map = { overview: 'Übersicht', ranking: 'Produkt-Ranking', movers: 'Top Movers', yoy: 'Vorjahresvergleich', brand: 'Brand-Analyse' };
             return map[id] || id;
         }
 
@@ -738,7 +733,6 @@
                 case 'overview': renderKPIs(); renderTrendSection(); break;
                 case 'ranking': renderRanking(); break;
                 case 'movers': renderTopMovers(); break;
-                case 'compare': renderCompareSection(); break;
                 case 'yoy': renderYoYSection(); break;
                 case 'brand': renderBrandSection(); break;
             }
@@ -962,20 +956,22 @@
             });
         }
 
-        /* ── C. Top Movers ── */
+        /* ── C. Top Movers + Vergleichstabelle ── */
         function renderTopMovers() {
             var el = document.getElementById('topMoverSection');
             if (!el) return;
-            var lastMonth = getLastMonth();
-            var prevMonth = lastMonth ? getPrevMonth(lastMonth) : null;
 
-            if (!lastMonth || !prevMonth) {
+            if (availableMonths.length < 2) {
                 el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Mindestens zwei Monate benötigt für Top Movers.</div></div>';
                 return;
             }
 
-            var lastData = getDataForMonth(lastMonth);
-            var prevData = getDataForMonth(prevMonth);
+            // Default: A = latest, B = previous
+            if (!moverMonthA || availableMonths.indexOf(moverMonthA) === -1) moverMonthA = availableMonths[availableMonths.length - 1];
+            if (!moverMonthB || availableMonths.indexOf(moverMonthB) === -1) moverMonthB = availableMonths[availableMonths.length - 2];
+
+            var lastData = getDataForMonth(moverMonthA);
+            var prevData = getDataForMonth(moverMonthB);
 
             var lastMap = {};
             lastData.forEach(function(r) { if (r.asin) lastMap[r.asin] = r; });
@@ -1008,13 +1004,28 @@
             var winners = movers.filter(function(m) { return m.deltaAbs > 0; }).sort(function(a, b) { return b.deltaAbs - a.deltaAbs; }).slice(0, moverTopN);
             var losers = movers.filter(function(m) { return m.deltaAbs < 0; }).sort(function(a, b) { return a.deltaAbs - b.deltaAbs; }).slice(0, moverTopN);
 
-            var lastLabel = monthLabel(lastData.length > 0 ? lastData[0].period_start : lastMonth);
-            var prevLabel = monthLabel(prevData.length > 0 ? prevData[0].period_start : prevMonth);
+            var lastLabel = monthLabel(lastData.length > 0 ? lastData[0].period_start : moverMonthA);
+            var prevLabel = monthLabel(prevData.length > 0 ? prevData[0].period_start : moverMonthB);
+
+            // Month selector options
+            var monthOptA = availableMonths.map(function(m) {
+                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                var lbl = ps ? monthLabel(ps.period_start) : m;
+                return '<option value="' + m + '"' + (m === moverMonthA ? ' selected' : '') + '>' + lbl + '</option>';
+            }).join('');
+            var monthOptB = availableMonths.map(function(m) {
+                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                var lbl = ps ? monthLabel(ps.period_start) : m;
+                return '<option value="' + m + '"' + (m === moverMonthB ? ' selected' : '') + '>' + lbl + '</option>';
+            }).join('');
 
             var html = '<div class="section-card">' +
                 '<div class="section-header">' +
-                    '<h3>Top Movers ' + infoIcon('movers', 'Top Movers', 'Vergleich ' + prevLabel + ' vs. ' + lastLabel + '.<br>Nur ASINs die in beiden Monaten existieren.') + '</h3>' +
-                    '<div style="display:flex;align-items:center;gap:8px;">' +
+                    '<h3>Top Movers & Vergleich ' + infoIcon('movers', 'Top Movers', 'Vergleicht zwei Monate. Top Movers zeigt die größten Gewinner und Verlierer, darunter die vollständige Vergleichstabelle.') + '</h3>' +
+                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                        '<select class="filter-select" onchange="changeMoverMonthA(this.value)">' + monthOptA + '</select>' +
+                        '<span style="font-size:12px;color:var(--text-secondary);">vs.</span>' +
+                        '<select class="filter-select" onchange="changeMoverMonthB(this.value)">' + monthOptB + '</select>' +
                         '<select class="filter-select" onchange="changeMoverTopN(this.value)">' +
                             '<option value="10"' + (moverTopN === 10 ? ' selected' : '') + '>Top 10</option>' +
                             '<option value="20"' + (moverTopN === 20 ? ' selected' : '') + '>Top 20</option>' +
@@ -1026,7 +1037,6 @@
                             '<option value="customer_returns"' + (moverMetric === 'customer_returns' ? ' selected' : '') + '>Nach Rücksendungen</option>' +
                         '</select>' +
                         '<button class="btn-export" onclick="exportTopMovers()">&#8681; Export</button>' +
-                        '<span style="font-size:12px;color:var(--text-secondary);">' + prevLabel + ' &rarr; ' + lastLabel + '</span>' +
                     '</div>' +
                 '</div>' +
                 '<div class="section-body">';
@@ -1084,11 +1094,69 @@
                 '</div>' +
             '</div>';
 
+            html += '</div>';
+
+            // Full comparison table
+            var allMovers = movers.slice().sort(function(a, b) {
+                var va = a[moverSortCol], vb = b[moverSortCol];
+                if (typeof va === 'string') return moverSortDir * va.localeCompare(vb);
+                return moverSortDir * (va - vb);
+            });
+
+            function moverThClass(col) { return moverSortCol === col ? ' class="sorted"' : ''; }
+            function moverSortIcon(col) { return moverSortCol === col ? (moverSortDir === 1 ? ' &#9650;' : ' &#9660;') : ' &#9650;'; }
+
+            html += '<div style="margin-top:24px;">' +
+                '<h4 style="font-size:14px;margin-bottom:12px;">Alle Produkte im Vergleich (' + allMovers.length + ')</h4>' +
+                '<div class="table-wrap"><table><thead><tr>' +
+                    '<th' + moverThClass('asin') + ' onclick="moverSort(\'asin\')" style="text-align:left;">ASIN ' + moverSortIcon('asin') + '</th>' +
+                    '<th' + moverThClass('title') + ' onclick="moverSort(\'title\')" style="text-align:left;">Titel ' + moverSortIcon('title') + '</th>' +
+                    '<th' + moverThClass('currVal') + ' onclick="moverSort(\'currVal\')">' + lastLabel + ' ' + moverSortIcon('currVal') + '</th>' +
+                    '<th' + moverThClass('prevVal') + ' onclick="moverSort(\'prevVal\')">' + prevLabel + ' ' + moverSortIcon('prevVal') + '</th>' +
+                    '<th' + moverThClass('deltaAbs') + ' onclick="moverSort(\'deltaAbs\')">&Delta; ' + moverSortIcon('deltaAbs') + '</th>' +
+                    '<th' + moverThClass('deltaPct') + ' onclick="moverSort(\'deltaPct\')">&Delta; % ' + moverSortIcon('deltaPct') + '</th>' +
+                '</tr></thead><tbody>';
+
+            allMovers.forEach(function(m) {
+                var cls = m.deltaAbs > 0 ? 'val-positive' : m.deltaAbs < 0 ? 'val-negative' : '';
+                html += '<tr>' +
+                    '<td style="text-align:left;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + m.asin + '" class="asin-link">' + m.asin + '</a></td>' +
+                    '<td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + m.title.replace(/"/g, '&quot;') + '">' + m.title + '</td>' +
+                    '<td>' + metricFmt(m.currVal) + '</td>' +
+                    '<td>' + metricFmt(m.prevVal) + '</td>' +
+                    '<td class="' + cls + '">' + (m.deltaAbs > 0 ? '+' : '') + metricFmt(m.deltaAbs) + '</td>' +
+                    '<td class="' + cls + '">' + (m.deltaPct > 0 ? '+' : '') + fmtPct.format(m.deltaPct) + ' %</td>' +
+                '</tr>';
+            });
+
+            html += '</tbody></table></div></div>';
             html += '</div></div>';
             el.innerHTML = html;
 
             renderTopMoverCharts(winners, losers);
         }
+
+        window.changeMoverMonthA = function(val) {
+            moverMonthA = val;
+            destroyAllCharts();
+            renderTopMovers();
+            initInfoIcons();
+        };
+
+        window.changeMoverMonthB = function(val) {
+            moverMonthB = val;
+            destroyAllCharts();
+            renderTopMovers();
+            initInfoIcons();
+        };
+
+        window.moverSort = function(col) {
+            if (moverSortCol === col) { moverSortDir *= -1; }
+            else { moverSortCol = col; moverSortDir = col === 'asin' || col === 'title' ? 1 : -1; }
+            destroyAllCharts();
+            renderTopMovers();
+            initInfoIcons();
+        };
 
         function changeMoverTopN(val) {
             moverTopN = parseInt(val);
@@ -1105,11 +1173,9 @@
         }
 
         function exportTopMovers() {
-            var lastMonth = getLastMonth();
-            var prevMonth = lastMonth ? getPrevMonth(lastMonth) : null;
-            if (!lastMonth || !prevMonth) return;
-            var lastData = getDataForMonth(lastMonth);
-            var prevData = getDataForMonth(prevMonth);
+            if (!moverMonthA || !moverMonthB) return;
+            var lastData = getDataForMonth(moverMonthA);
+            var prevData = getDataForMonth(moverMonthB);
             var lastMap = {}; lastData.forEach(function(r) { if (r.asin) lastMap[r.asin] = r; });
             var prevMap = {}; prevData.forEach(function(r) { if (r.asin) prevMap[r.asin] = r; });
             var metricKey = moverMetric;
@@ -1361,160 +1427,7 @@
             exportToExcel(rows, ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Einheiten', 'Vers.-Umsatz', 'Rücksendungen'], 'Produkt-Ranking', 'Produkt-Ranking');
         }
 
-        /* ── E. Monatsvergleich ── */
-        function renderCompareSection() {
-            var el = document.getElementById('compareSection');
-            if (!el) return;
-            if (availableMonths.length < 2) { el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Mindestens zwei Monate benötigt.</div></div>'; return; }
-
-            if (!compareMonthA || availableMonths.indexOf(compareMonthA) === -1) {
-                compareMonthA = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 1] : availableMonths[0];
-            }
-            if (!compareMonthB || availableMonths.indexOf(compareMonthB) === -1) {
-                compareMonthB = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 2] : availableMonths[0];
-            }
-
-            var optionsHtml = availableMonths.map(function(m) {
-                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
-                var label = ps ? monthLabel(ps.period_start) : m;
-                return { value: m, label: label };
-            });
-
-            var selA = optionsHtml.map(function(o) {
-                return '<option value="' + o.value + '"' + (o.value === compareMonthA ? ' selected' : '') + '>' + o.label + '</option>';
-            }).join('');
-            var selB = optionsHtml.map(function(o) {
-                return '<option value="' + o.value + '"' + (o.value === compareMonthB ? ' selected' : '') + '>' + o.label + '</option>';
-            }).join('');
-
-            var dataA = getDataForMonth(compareMonthA);
-            var dataB = getDataForMonth(compareMonthB);
-
-            var mapA = {}; dataA.forEach(function(r) { if (r.asin) mapA[r.asin] = r; });
-            var mapB = {}; dataB.forEach(function(r) { if (r.asin) mapB[r.asin] = r; });
-
-            var allAsins = {};
-            Object.keys(mapA).forEach(function(a) { allAsins[a] = true; });
-            Object.keys(mapB).forEach(function(a) { allAsins[a] = true; });
-
-            var rows = Object.keys(allAsins).map(function(asin) {
-                var a = mapA[asin] || {};
-                var b = mapB[asin] || {};
-                var revA = a.ordered_revenue || 0;
-                var revB = b.ordered_revenue || 0;
-                var unitsA = a.ordered_units || 0;
-                var unitsB = b.ordered_units || 0;
-                return {
-                    asin: asin,
-                    title: b.title || a.title || '',
-                    revA: revA,
-                    revB: revB,
-                    delta_rev: revB - revA,
-                    delta_rev_pct: revA ? ((revB - revA) / revA) * 100 : (revB > 0 ? 100 : 0),
-                    unitsA: unitsA,
-                    unitsB: unitsB,
-                    delta_units: unitsB - unitsA
-                };
-            });
-
-            rows.sort(function(a, b) {
-                if (compareSortCol === 'asin' || compareSortCol === 'title') {
-                    var va = (a[compareSortCol] || '').toLowerCase();
-                    var vb = (b[compareSortCol] || '').toLowerCase();
-                    return compareSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-                }
-                return compareSortDir === 'asc' ? (a[compareSortCol] || 0) - (b[compareSortCol] || 0) : (b[compareSortCol] || 0) - (a[compareSortCol] || 0);
-            });
-
-            var labelA = optionsHtml.find(function(o) { return o.value === compareMonthA; }).label;
-            var labelB = optionsHtml.find(function(o) { return o.value === compareMonthB; }).label;
-
-            function cmpSortIcon(col) {
-                var active = compareSortCol === col;
-                var arrow = active ? (compareSortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;';
-                return '<span class="sort-icon">' + arrow + '</span>';
-            }
-            function cmpThClass(col) {
-                return compareSortCol === col ? ' class="sorted"' : '';
-            }
-
-            var html = '<div class="section-card">' +
-                '<div class="section-header">' +
-                    '<h3>Monatsvergleich ' + infoIcon('compare', 'Monatsvergleich', 'Vergleiche zwei Monate direkt. Grüne Werte = Wachstum, rote Werte = Rückgang.') + '</h3>' +
-                    '<button class="btn-export" onclick="exportCompare()">&#8681; Export</button>' +
-                '</div>' +
-                '<div class="section-body">' +
-                    '<div class="compare-controls">' +
-                        '<span class="compare-label">Monat A:</span>' +
-                        '<select class="compare-select" onchange="changeCompareA(this.value)">' + selA + '</select>' +
-                        '<span class="compare-label">vs. Monat B:</span>' +
-                        '<select class="compare-select" onchange="changeCompareB(this.value)">' + selB + '</select>' +
-                    '</div>' +
-                    '<div class="table-wrap"><table><thead><tr>' +
-                        '<th' + cmpThClass('asin') + ' onclick="compareSort(\'asin\')">ASIN ' + cmpSortIcon('asin') + '</th>' +
-                        '<th' + cmpThClass('title') + ' onclick="compareSort(\'title\')" style="text-align:left;">Titel ' + cmpSortIcon('title') + '</th>' +
-                        '<th' + cmpThClass('revA') + ' onclick="compareSort(\'revA\')">Umsatz ' + labelA + ' ' + cmpSortIcon('revA') + '</th>' +
-                        '<th' + cmpThClass('revB') + ' onclick="compareSort(\'revB\')">Umsatz ' + labelB + ' ' + cmpSortIcon('revB') + '</th>' +
-                        '<th' + cmpThClass('delta_rev') + ' onclick="compareSort(\'delta_rev\')">&Delta; EUR ' + cmpSortIcon('delta_rev') + '</th>' +
-                        '<th' + cmpThClass('delta_rev_pct') + ' onclick="compareSort(\'delta_rev_pct\')">&Delta; % ' + cmpSortIcon('delta_rev_pct') + '</th>' +
-                        '<th' + cmpThClass('unitsA') + ' onclick="compareSort(\'unitsA\')">Einh. ' + labelA + ' ' + cmpSortIcon('unitsA') + '</th>' +
-                        '<th' + cmpThClass('unitsB') + ' onclick="compareSort(\'unitsB\')">Einh. ' + labelB + ' ' + cmpSortIcon('unitsB') + '</th>' +
-                        '<th' + cmpThClass('delta_units') + ' onclick="compareSort(\'delta_units\')">&Delta; Einh. ' + cmpSortIcon('delta_units') + '</th>' +
-                    '</tr></thead><tbody>';
-
-            window._compareExportRows = rows;
-
-            rows.slice(0, 100).forEach(function(r) {
-                var revClass = r.delta_rev > 0 ? 'val-positive' : r.delta_rev < 0 ? 'val-negative' : '';
-                var pctClass = r.delta_rev_pct > 0 ? 'val-positive' : r.delta_rev_pct < 0 ? 'val-negative' : '';
-                var unitClass = r.delta_units > 0 ? 'val-positive' : r.delta_units < 0 ? 'val-negative' : '';
-
-                html += '<tr>' +
-                    '<td style="text-align:left;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
-                    '<td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
-                    '<td>' + formatEuro(r.revA) + '</td>' +
-                    '<td>' + formatEuro(r.revB) + '</td>' +
-                    '<td class="' + revClass + '">' + (r.delta_rev > 0 ? '+' : '') + formatEuro(r.delta_rev) + '</td>' +
-                    '<td class="' + pctClass + '">' + formatPct(r.delta_rev_pct) + '</td>' +
-                    '<td>' + formatInt(r.unitsA) + '</td>' +
-                    '<td>' + formatInt(r.unitsB) + '</td>' +
-                    '<td class="' + unitClass + '">' + (r.delta_units > 0 ? '+' : '') + formatInt(r.delta_units) + '</td>' +
-                    '</tr>';
-            });
-
-            html += '</tbody></table></div></div></div>';
-            el.innerHTML = html;
-        }
-
-        function exportCompare() {
-            var rows = (window._compareExportRows || []).map(function(r) {
-                return [r.asin, r.title, r.revA, r.revB, r.delta_rev, Math.round(r.delta_rev_pct * 10) / 10, r.unitsA, r.unitsB, r.delta_units];
-            });
-            exportToExcel(rows, ['ASIN', 'Titel', 'Umsatz A', 'Umsatz B', 'Delta EUR', 'Delta %', 'Einh. A', 'Einh. B', 'Delta Einh.'], 'Monatsvergleich', 'Monatsvergleich');
-        }
-
-        function changeCompareA(val) {
-            compareMonthA = val;
-            renderCompareSection();
-            initInfoIcons();
-        }
-        function changeCompareB(val) {
-            compareMonthB = val;
-            renderCompareSection();
-            initInfoIcons();
-        }
-        function compareSort(col) {
-            if (compareSortCol === col) {
-                compareSortDir = compareSortDir === 'asc' ? 'desc' : 'asc';
-            } else {
-                compareSortCol = col;
-                compareSortDir = 'desc';
-            }
-            renderCompareSection();
-            initInfoIcons();
-        }
-
-        /* ── F. Vorjahresvergleich (YoY) ── */
+        /* ── E. Vorjahresvergleich (YoY) ── */
         function renderYoYSection() {
             var el = document.getElementById('yoySection');
             if (!el) return;
