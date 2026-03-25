@@ -525,9 +525,7 @@
                         uploaded++;
                     } catch (e) {
                         errors++;
-                        var errMsg = e && e.message ? e.message : String(e);
-                        errorDetails.push(pf.name + ': ' + errMsg);
-                        alert('Upload-Fehler bei ' + pf.name + ':\n' + errMsg);
+                        errorDetails.push(pf.name + ': ' + (e && e.message ? e.message : String(e)));
                     }
                     progressFill.style.width = Math.round(((fi + 1) / totalFiles) * 100) + '%';
                 }
