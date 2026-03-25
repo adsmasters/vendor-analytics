@@ -292,11 +292,12 @@
                         '<td>' + esc(c.marketplace) + '</td>' +
                         '<td>' + rc + '</td>' +
                         '<td class="text-muted">' + formatDate(c.created_at) + '</td>' +
-                        '<td>' +
-                            '<a class="btn-sm" href="upload.html?client=' + c.id + '">Upload</a> ' +
-                            '<a class="btn-sm" href="dashboard.html?client=' + c.id + '">Dashboard</a> ' +
-                            '<button class="btn-sm" onclick="editClient(\'' + c.id + '\')">Bearbeiten</button> ' +
+                        '<td><div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                            '<a class="btn-sm" href="upload.html?client=' + c.id + '">Upload</a>' +
+                            '<a class="btn-sm" href="dashboard.html?client=' + c.id + '">Dashboard</a>' +
+                            '<button class="btn-sm" onclick="editClient(\'' + c.id + '\')">Bearbeiten</button>' +
                             '<button class="btn-sm danger" onclick="deleteClient(\'' + c.id + '\',\'' + esc(c.name) + '\')">Löschen</button>' +
+                        '</div>' +
                         '</td>' +
                     '</tr>';
                 }).join('');
