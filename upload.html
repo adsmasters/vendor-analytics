@@ -272,14 +272,27 @@
                 }
             }
 
-            function parseDateDE(s) {
-                var parts = s.trim().split('.');
-                if (parts.length !== 3) return null;
-                var day = parseInt(parts[0], 10);
-                var month = parseInt(parts[1], 10) - 1;
-                var year = parseInt(parts[2], 10);
-                if (year < 100) year += 2000;
-                return new Date(year, month, day);
+            function parseDate(s) {
+                s = s.trim();
+                // Try DD.MM.YY or DD.MM.YYYY (German)
+                var dotParts = s.split('.');
+                if (dotParts.length === 3) {
+                    var day = parseInt(dotParts[0], 10);
+                    var month = parseInt(dotParts[1], 10) - 1;
+                    var year = parseInt(dotParts[2], 10);
+                    if (year < 100) year += 2000;
+                    return new Date(year, month, day);
+                }
+                // Try DD/MM/YYYY (English/UK)
+                var slashParts = s.split('/');
+                if (slashParts.length === 3) {
+                    var day2 = parseInt(slashParts[0], 10);
+                    var month2 = parseInt(slashParts[1], 10) - 1;
+                    var year2 = parseInt(slashParts[2], 10);
+                    if (year2 < 100) year2 += 2000;
+                    return new Date(year2, month2, day2);
+                }
+                return null;
             }
 
             function parseNum(v) {
@@ -313,13 +326,13 @@
                         }
                     }
 
-                    var periodStr = meta['Sichtweite'] || meta['Reporting Range'] || '';
+                    var periodStr = meta['Sichtweite'] || meta['Viewing Range'] || meta['Reporting Range'] || '';
                     var periodParts = periodStr.split(' - ');
                     var periodStart = null;
                     var periodEnd = null;
                     if (periodParts.length === 2) {
-                        periodStart = parseDateDE(periodParts[0]);
-                        periodEnd = parseDateDE(periodParts[1]);
+                        periodStart = parseDate(periodParts[0]);
+                        periodEnd = parseDate(periodParts[1]);
                     }
 
                     if (!periodStart || !periodEnd) {
@@ -330,10 +343,18 @@
                     var headers = json[1];
                     var headerMap = {};
                     var headerNames = {
+                        // German
                         'ASIN': 'asin', 'Produktbezeichnung': 'title', 'Marke': 'brand',
                         'Bestellungsumsatz': 'ordered_revenue', 'Bestellte Einheiten': 'ordered_units',
                         'Versandumsatz': 'shipped_revenue', 'Versendete COGS': 'shipped_cogs',
-                        'Versandte Einheiten': 'shipped_units', 'Kundenrücksendungen': 'customer_returns'
+                        'Versandte Einheiten': 'shipped_units', 'Kundenrücksendungen': 'customer_returns',
+                        // English
+                        'Product title': 'title', 'Brand': 'brand',
+                        'Ordered revenue': 'ordered_revenue', 'Ordered units': 'ordered_units',
+                        'Dispatched revenue': 'shipped_revenue', 'Dispatched COGS': 'shipped_cogs',
+                        'Dispatched units': 'shipped_units', 'Customer returns': 'customer_returns',
+                        'Shipped revenue': 'shipped_revenue', 'Shipped COGS': 'shipped_cogs',
+                        'Shipped units': 'shipped_units'
                     };
                     for (var h = 0; h < headers.length; h++) {
                         var hName = String(headers[h]).trim();
@@ -347,15 +368,22 @@
                         var row = json[r];
                         var asin = String(row[headerMap.asin] || '').trim();
                         if (!asin || asin.length < 5) continue;
+                        var ordRev = headerMap.ordered_revenue !== undefined ? parseNum(row[headerMap.ordered_revenue]) : 0;
+                        var ordUnits = headerMap.ordered_units !== undefined ? parseNum(row[headerMap.ordered_units]) : 0;
+                        var shipRev = headerMap.shipped_revenue !== undefined ? parseNum(row[headerMap.shipped_revenue]) : 0;
+                        var shipUnits = headerMap.shipped_units !== undefined ? parseNum(row[headerMap.shipped_units]) : 0;
+                        // Fallback: if no ordered data, use shipped data
+                        if (!ordRev && shipRev) ordRev = shipRev;
+                        if (!ordUnits && shipUnits) ordUnits = shipUnits;
                         rows.push({
                             asin: asin,
                             title: String(row[headerMap.title] || '').trim(),
                             brand: String(row[headerMap.brand] || '').trim(),
-                            ordered_revenue: parseNum(row[headerMap.ordered_revenue]),
-                            ordered_units: parseNum(row[headerMap.ordered_units]),
-                            shipped_revenue: parseNum(row[headerMap.shipped_revenue]),
-                            shipped_cogs: parseNum(row[headerMap.shipped_cogs]),
-                            shipped_units: parseNum(row[headerMap.shipped_units]),
+                            ordered_revenue: ordRev,
+                            ordered_units: ordUnits,
+                            shipped_revenue: shipRev,
+                            shipped_cogs: headerMap.shipped_cogs !== undefined ? parseNum(row[headerMap.shipped_cogs]) : 0,
+                            shipped_units: shipUnits,
                             customer_returns: parseNum(row[headerMap.customer_returns])
                         });
                     }
