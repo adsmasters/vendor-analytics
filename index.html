@@ -140,7 +140,7 @@
             var PASS = 'adsmasters2026';
 
             if (sessionStorage.getItem('vra_auth') === '1') {
-                window.location.href = 'dashboard.html';
+                window.location.href = 'clients.html';
                 return;
             }
 
@@ -163,7 +163,7 @@
                 var pw = document.getElementById('password').value;
                 if (pw === PASS) {
                     sessionStorage.setItem('vra_auth', '1');
-                    window.location.href = 'dashboard.html';
+                    window.location.href = 'clients.html';
                 } else {
                     document.getElementById('errorMsg').style.display = 'block';
                 }
