@@ -698,6 +698,22 @@
                 return '<option value="' + o.value + '"' + (o.value === window._periodTo ? ' selected' : '') + '>' + o.label + '</option>';
             }).join('');
 
+            // Compare period state
+            if (!window._compareEnabled) window._compareEnabled = false;
+            if (!window._compareFrom || availableMonths.indexOf(window._compareFrom) === -1) window._compareFrom = availableMonths[0];
+            if (!window._compareTo || availableMonths.indexOf(window._compareTo) === -1) {
+                // Default: same length period before the selected range
+                var periodLen = selectedMonths.length;
+                var firstIdx = availableMonths.indexOf(selectedMonths[0]);
+                if (firstIdx >= periodLen) {
+                    window._compareFrom = availableMonths[firstIdx - periodLen];
+                    window._compareTo = availableMonths[firstIdx - 1];
+                } else {
+                    window._compareFrom = availableMonths[0];
+                    window._compareTo = availableMonths[Math.max(0, firstIdx - 1)];
+                }
+            }
+
             var periodHtml = '<div style="margin-bottom:24px;">' +
                 '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
                 '<span style="font-size:11px;color:var(--text-primary);text-transform:uppercase;letter-spacing:0.3px;font-weight:600;">Zeitraum</span>' +
@@ -706,7 +722,25 @@
                 '<select class="filter-select" onchange="changePeriodTo(this.value)">' + toOpts + '</select>' +
                 '<button class="period-action-btn" onclick="selectAllMonths()">Alle</button>' +
                 '<span style="font-size:12px;color:var(--text-secondary);">' + selectedMonths.length + ' von ' + availableMonths.length + ' Monaten</span>' +
-                '</div></div>';
+                '<label style="display:flex;align-items:center;gap:4px;margin-left:12px;cursor:pointer;font-size:13px;">' +
+                    '<input type="checkbox" onchange="toggleCompare(this.checked)"' + (window._compareEnabled ? ' checked' : '') + '>' +
+                    ' Vergleichen mit:' +
+                '</label>';
+
+            if (window._compareEnabled) {
+                var compFromOpts = monthOptions.map(function(o) {
+                    return '<option value="' + o.value + '"' + (o.value === window._compareFrom ? ' selected' : '') + '>' + o.label + '</option>';
+                }).join('');
+                var compToOpts = monthOptions.map(function(o) {
+                    return '<option value="' + o.value + '"' + (o.value === window._compareTo ? ' selected' : '') + '>' + o.label + '</option>';
+                }).join('');
+                periodHtml +=
+                    '<select class="filter-select" onchange="changeCompareFrom(this.value)">' + compFromOpts + '</select>' +
+                    '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
+                    '<select class="filter-select" onchange="changeCompareTo(this.value)">' + compToOpts + '</select>';
+            }
+
+            periodHtml += '</div></div>';
 
             // Tab bar
             var tabs = [
@@ -800,6 +834,24 @@
             destroyAllCharts();
             render();
         };
+        window.toggleCompare = function(checked) {
+            window._compareEnabled = checked;
+            destroyAllCharts();
+            render();
+        };
+        window.changeCompareFrom = function(val) {
+            window._compareFrom = val;
+            if (window._compareTo < val) window._compareTo = val;
+            destroyAllCharts();
+            render();
+        };
+        window.changeCompareTo = function(val) {
+            window._compareTo = val;
+            if (window._compareFrom > val) window._compareFrom = val;
+            destroyAllCharts();
+            render();
+        };
+
         function selectAllMonths() {
             window._periodFrom = availableMonths[0];
             window._periodTo = availableMonths[availableMonths.length - 1];
@@ -877,23 +929,22 @@
                 });
             });
 
-            // Compare with previous period of same length
-            var periodLength = selectedMonths.length;
-            var firstIdx = availableMonths.indexOf(selectedMonths[0]);
+            // Compare with user-selected period (or auto previous period)
             var comp = null;
-            if (firstIdx >= periodLength) {
+            if (window._compareEnabled && window._compareFrom && window._compareTo) {
                 comp = { ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_units: 0, customer_returns: 0 };
-                for (var ci = 0; ci < periodLength; ci++) {
-                    var compMonth = availableMonths[firstIdx - periodLength + ci];
-                    var compData = getDataForMonth(compMonth);
-                    compData.forEach(function(r) {
-                        comp.ordered_revenue += r.ordered_revenue || 0;
-                        comp.ordered_units += r.ordered_units || 0;
-                        comp.shipped_revenue += r.shipped_revenue || 0;
-                        comp.shipped_units += r.shipped_units || 0;
-                        comp.customer_returns += r.customer_returns || 0;
-                    });
-                }
+                availableMonths.forEach(function(m) {
+                    if (m >= window._compareFrom && m <= window._compareTo) {
+                        var compData = getDataForMonth(m);
+                        compData.forEach(function(r) {
+                            comp.ordered_revenue += r.ordered_revenue || 0;
+                            comp.ordered_units += r.ordered_units || 0;
+                            comp.shipped_revenue += r.shipped_revenue || 0;
+                            comp.shipped_units += r.shipped_units || 0;
+                            comp.customer_returns += r.customer_returns || 0;
+                        });
+                    }
+                });
             }
 
             // Labels
@@ -905,10 +956,10 @@
             var toOpt = monthOpts.find(function(o) { return o.value === selectedMonths[selectedMonths.length - 1]; });
             var rangeStr = selectedMonths.length === 1 ? (fromOpt ? fromOpt.label : '') : (fromOpt ? fromOpt.label : '') + ' – ' + (toOpt ? toOpt.label : '');
             var compRangeStr = '';
-            if (comp && firstIdx >= periodLength) {
-                var compFromOpt = monthOpts.find(function(o) { return o.value === availableMonths[firstIdx - periodLength]; });
-                var compToOpt = monthOpts.find(function(o) { return o.value === availableMonths[firstIdx - 1]; });
-                compRangeStr = periodLength === 1 ? (compFromOpt ? compFromOpt.label : '') : (compFromOpt ? compFromOpt.label : '') + ' – ' + (compToOpt ? compToOpt.label : '');
+            if (comp && window._compareEnabled) {
+                var compFromOpt = monthOpts.find(function(o) { return o.value === window._compareFrom; });
+                var compToOpt = monthOpts.find(function(o) { return o.value === window._compareTo; });
+                compRangeStr = window._compareFrom === window._compareTo ? (compFromOpt ? compFromOpt.label : '') : (compFromOpt ? compFromOpt.label : '') + ' – ' + (compToOpt ? compToOpt.label : '');
             }
 
             var html = '<div class="section-card"><div class="section-body">';
