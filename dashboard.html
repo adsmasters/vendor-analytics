@@ -924,7 +924,8 @@
                     }
                     var compFormatted = kpi.fmt === 'eur' ? formatEuro(compVal) : formatInt(compVal);
                     diffStr = (compVal ? (diff > 0 ? '&#9650; +' : diff < 0 ? '&#9660; ' : '') + fmtPct.format(Math.abs(diff)) + ' %' : '—') +
-                        '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">' + compRangeStr + ': ' + compFormatted + '</div>';
+                        '<div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">' + compRangeStr + '</div>' +
+                        '<div style="font-size:14px;font-weight:600;margin-top:2px;">' + compFormatted + '</div>';
                 }
 
                 html += '<div class="kpi-card">' +
