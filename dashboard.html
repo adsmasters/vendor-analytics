@@ -1367,8 +1367,12 @@
             if (!el) return;
             if (availableMonths.length < 2) { el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Mindestens zwei Monate benötigt.</div></div>'; return; }
 
-            if (!compareMonthA) compareMonthA = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 2] : availableMonths[0];
-            if (!compareMonthB) compareMonthB = availableMonths[availableMonths.length - 1];
+            if (!compareMonthA || availableMonths.indexOf(compareMonthA) === -1) {
+                compareMonthA = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 1] : availableMonths[0];
+            }
+            if (!compareMonthB || availableMonths.indexOf(compareMonthB) === -1) {
+                compareMonthB = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 2] : availableMonths[0];
+            }
 
             var optionsHtml = availableMonths.map(function(m) {
                 var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
@@ -1466,7 +1470,7 @@
                 var unitClass = r.delta_units > 0 ? 'val-positive' : r.delta_units < 0 ? 'val-negative' : '';
 
                 html += '<tr>' +
-                    '<td style="text-align:left;font-family:monospace;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
+                    '<td style="text-align:left;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
                     '<td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
                     '<td>' + formatEuro(r.revA) + '</td>' +
                     '<td>' + formatEuro(r.revB) + '</td>' +
@@ -1638,7 +1642,7 @@
                 var revClass = r.delta_rev > 0 ? 'val-positive' : r.delta_rev < 0 ? 'val-negative' : '';
                 var pctClass = r.delta_rev_pct > 0 ? 'val-positive' : r.delta_rev_pct < 0 ? 'val-negative' : '';
                 html += '<tr>' +
-                    '<td style="text-align:left;font-family:monospace;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
+                    '<td style="text-align:left;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
                     '<td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
                     '<td>' + formatEuro(r.revCurr) + '</td>' +
                     '<td>' + formatEuro(r.revPrev) + '</td>' +
