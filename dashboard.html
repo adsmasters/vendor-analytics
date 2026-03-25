@@ -1465,12 +1465,13 @@
             data.forEach(function(r) {
                 if (!r.asin) return;
                 if (!asinMap[r.asin]) {
-                    asinMap[r.asin] = { asin: r.asin, title: r.title || '', brand: r.brand || '', ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_cogs: 0, customer_returns: 0 };
+                    asinMap[r.asin] = { asin: r.asin, title: r.title || '', brand: r.brand || '', ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_cogs: 0, shipped_units: 0, customer_returns: 0 };
                 }
                 asinMap[r.asin].ordered_revenue += r.ordered_revenue || 0;
                 asinMap[r.asin].ordered_units += r.ordered_units || 0;
                 asinMap[r.asin].shipped_revenue += r.shipped_revenue || 0;
                 asinMap[r.asin].shipped_cogs += r.shipped_cogs || 0;
+                asinMap[r.asin].shipped_units += r.shipped_units || 0;
                 asinMap[r.asin].customer_returns += r.customer_returns || 0;
                 if (r.title) asinMap[r.asin].title = r.title;
                 if (r.brand) asinMap[r.asin].brand = r.brand;
@@ -1505,9 +1506,10 @@
                         var compData = getDataForMonth(m);
                         compData.forEach(function(r) {
                             if (!r.asin) return;
-                            if (!compMap[r.asin]) compMap[r.asin] = { ordered_revenue: 0, ordered_units: 0 };
+                            if (!compMap[r.asin]) compMap[r.asin] = { ordered_revenue: 0, ordered_units: 0, shipped_units: 0 };
                             compMap[r.asin].ordered_revenue += r.ordered_revenue || 0;
                             compMap[r.asin].ordered_units += r.ordered_units || 0;
+                            compMap[r.asin].shipped_units += r.shipped_units || 0;
                         });
                     }
                 });
@@ -1520,10 +1522,12 @@
                 if (hasCompare && compMap[r.asin]) {
                     r.comp_revenue = compMap[r.asin].ordered_revenue;
                     r.comp_units = compMap[r.asin].ordered_units;
-                    r.delta_revenue = r.ordered_revenue - r.comp_revenue;
+                    r.comp_shipped_units = compMap[r.asin].shipped_units;
                     r.delta_revenue_pct = r.comp_revenue ? ((r.ordered_revenue - r.comp_revenue) / r.comp_revenue) * 100 : 0;
+                    r.delta_shipped_units_pct = r.comp_shipped_units ? ((r.shipped_units - r.comp_shipped_units) / r.comp_shipped_units) * 100 : 0;
                 } else if (hasCompare) {
-                    r.comp_revenue = 0; r.comp_units = 0; r.delta_revenue = r.ordered_revenue; r.delta_revenue_pct = 100;
+                    r.comp_revenue = 0; r.comp_units = 0; r.comp_shipped_units = 0;
+                    r.delta_revenue_pct = 100; r.delta_shipped_units_pct = 100;
                 }
             });
 
@@ -1547,8 +1551,8 @@
                 { key: 'brand', label: 'Marke' },
                 { key: 'ordered_revenue', label: 'Best.-Umsatz' },
                 { key: 'revenue_share', label: 'Anteil %' },
-                { key: 'ordered_units', label: 'Einheiten' },
-                { key: 'shipped_revenue', label: 'Vers.-Umsatz' }
+                { key: 'ordered_units', label: 'Best. Einh.' },
+                { key: 'shipped_units', label: 'Vers. Einh.' }
             ];
             if (hasCompare) {
                 var mOpts = availableMonths.map(function(m) {
@@ -1561,7 +1565,9 @@
                 var mainToOpt = mOpts.find(function(o) { return o.value === window._periodTo; });
                 var mainLabel = window._periodFrom === window._periodTo ? (mainFromOpt ? mainFromOpt.label : '') : (mainFromOpt ? mainFromOpt.label : '') + '–' + (mainToOpt ? mainToOpt.label : '');
                 var compLabel = window._compareFrom === window._compareTo ? (compFromOpt ? compFromOpt.label : '') : (compFromOpt ? compFromOpt.label : '') + '–' + (compToOpt ? compToOpt.label : '');
-                cols.push({ key: 'delta_revenue_pct', label: 'Δ % (' + mainLabel + ' vs. ' + compLabel + ')' });
+                var vsLabel = mainLabel + ' vs. ' + compLabel;
+                cols.push({ key: 'delta_revenue_pct', label: 'Δ Umsatz % (' + vsLabel + ')' });
+                cols.push({ key: 'delta_shipped_units_pct', label: 'Δ Vers. Einh. % (' + vsLabel + ')' });
             }
 
             var html = '<div class="table-section">' +
@@ -1598,8 +1604,9 @@
                     '<td>' + formatEuro(r.ordered_revenue) + '</td>' +
                     '<td>' + fmtPct.format(r.revenue_share) + ' %</td>' +
                     '<td>' + formatInt(r.ordered_units) + '</td>' +
-                    '<td>' + formatEuro(r.shipped_revenue) + '</td>' +
+                    '<td>' + formatInt(r.shipped_units) + '</td>' +
                     (hasCompare ? '<td style="font-weight:600;' + (r.delta_revenue_pct > 0 ? 'color:var(--success);' : r.delta_revenue_pct < 0 ? 'color:var(--error);' : '') + '">' + (r.delta_revenue_pct > 0 ? '+' : '') + fmtPct.format(r.delta_revenue_pct) + ' %</td>' : '') +
+                    (hasCompare ? '<td style="font-weight:600;' + (r.delta_shipped_units_pct > 0 ? 'color:var(--success);' : r.delta_shipped_units_pct < 0 ? 'color:var(--error);' : '') + '">' + (r.delta_shipped_units_pct > 0 ? '+' : '') + fmtPct.format(r.delta_shipped_units_pct) + ' %</td>' : '') +
                     '</tr>';
             });
 
@@ -1651,12 +1658,13 @@
 
         function exportRanking() {
             var rows = (window._rankExportRows || []).map(function(r) {
-                var row = [r.asin, r.title, r.brand, r.ordered_revenue, Math.round(r.revenue_share * 10) / 10, r.ordered_units, r.shipped_revenue];
+                var row = [r.asin, r.title, r.brand, r.ordered_revenue, Math.round(r.revenue_share * 10) / 10, r.ordered_units, r.shipped_units];
                 if (r.delta_revenue_pct !== undefined) row.push(Math.round(r.delta_revenue_pct * 10) / 10);
+                if (r.delta_shipped_units_pct !== undefined) row.push(Math.round(r.delta_shipped_units_pct * 10) / 10);
                 return row;
             });
-            var headers = ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Anteil %', 'Einheiten', 'Vers.-Umsatz'];
-            if (window._compareEnabled) headers.push('Δ Umsatz %');
+            var headers = ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Anteil %', 'Best. Einh.', 'Vers. Einh.'];
+            if (window._compareEnabled) { headers.push('Δ Umsatz %'); headers.push('Δ Vers. Einh. %'); }
             exportToExcel(rows, headers, 'Produkt-Ranking', 'Produkt-Ranking');
         }
 
