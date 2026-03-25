@@ -1496,10 +1496,35 @@
                 return rankSortDir === 'asc' ? va - vb : vb - va;
             });
 
+            // Compare data if enabled
+            var compMap = {};
+            var hasCompare = window._compareEnabled && window._compareFrom && window._compareTo;
+            if (hasCompare) {
+                availableMonths.forEach(function(m) {
+                    if (m >= window._compareFrom && m <= window._compareTo) {
+                        var compData = getDataForMonth(m);
+                        compData.forEach(function(r) {
+                            if (!r.asin) return;
+                            if (!compMap[r.asin]) compMap[r.asin] = { ordered_revenue: 0, ordered_units: 0 };
+                            compMap[r.asin].ordered_revenue += r.ordered_revenue || 0;
+                            compMap[r.asin].ordered_units += r.ordered_units || 0;
+                        });
+                    }
+                });
+            }
+
             var totalRevenue = rows.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0);
             rows.forEach(function(r) {
                 r.revenue_share = totalRevenue ? (r.ordered_revenue / totalRevenue) * 100 : 0;
                 r.margin = r.shipped_revenue ? ((r.shipped_revenue - r.shipped_cogs) / r.shipped_revenue) * 100 : 0;
+                if (hasCompare && compMap[r.asin]) {
+                    r.comp_revenue = compMap[r.asin].ordered_revenue;
+                    r.comp_units = compMap[r.asin].ordered_units;
+                    r.delta_revenue = r.ordered_revenue - r.comp_revenue;
+                    r.delta_revenue_pct = r.comp_revenue ? ((r.ordered_revenue - r.comp_revenue) / r.comp_revenue) * 100 : 0;
+                } else if (hasCompare) {
+                    r.comp_revenue = 0; r.comp_units = 0; r.delta_revenue = r.ordered_revenue; r.delta_revenue_pct = 100;
+                }
             });
 
             var totalRows = rows.length;
@@ -1527,6 +1552,9 @@
                 { key: 'margin', label: 'Marge' },
                 { key: 'customer_returns', label: 'Rücksendungen' }
             ];
+            if (hasCompare) {
+                cols.push({ key: 'delta_revenue_pct', label: 'Δ Umsatz %' });
+            }
 
             var html = '<div class="table-section">' +
                 '<div class="table-toolbar table-toolbar-sticky">' +
@@ -1567,6 +1595,7 @@
                     '<td>' + formatEuro(r.shipped_revenue) + '</td>' +
                     '<td style="' + (r.margin >= 20 ? 'color:var(--success);font-weight:600;' : r.margin < 10 ? 'color:var(--error);font-weight:600;' : '') + '">' + fmtPct.format(r.margin) + ' %</td>' +
                     '<td>' + formatInt(r.customer_returns) + '</td>' +
+                    (hasCompare ? '<td style="font-weight:600;' + (r.delta_revenue_pct > 0 ? 'color:var(--success);' : r.delta_revenue_pct < 0 ? 'color:var(--error);' : '') + '">' + (r.delta_revenue_pct > 0 ? '+' : '') + fmtPct.format(r.delta_revenue_pct) + ' %</td>' : '') +
                     '</tr>';
             });
 
