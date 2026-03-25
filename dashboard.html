@@ -1404,6 +1404,9 @@
                 return rankSortDir === 'asc' ? va - vb : vb - va;
             });
 
+            var totalRevenue = rows.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0);
+            rows.forEach(function(r) { r.revenue_share = totalRevenue ? (r.ordered_revenue / totalRevenue) * 100 : 0; });
+
             var totalRows = rows.length;
             var allRowsForExport = rows.slice();
             var displayRows = rows.slice(0, rankDisplayCount);
@@ -1423,6 +1426,7 @@
                 { key: 'title', label: 'Titel' },
                 { key: 'brand', label: 'Marke' },
                 { key: 'ordered_revenue', label: 'Best.-Umsatz' },
+                { key: 'revenue_share', label: 'Anteil %' },
                 { key: 'ordered_units', label: 'Einheiten' },
                 { key: 'shipped_revenue', label: 'Vers.-Umsatz' },
                 { key: 'customer_returns', label: 'Rücksendungen' }
@@ -1461,6 +1465,7 @@
                     '<td title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
                     '<td>' + r.brand + '</td>' +
                     '<td>' + formatEuro(r.ordered_revenue) + '</td>' +
+                    '<td>' + fmtPct.format(r.revenue_share) + ' %</td>' +
                     '<td>' + formatInt(r.ordered_units) + '</td>' +
                     '<td>' + formatEuro(r.shipped_revenue) + '</td>' +
                     '<td>' + formatInt(r.customer_returns) + '</td>' +
@@ -1515,9 +1520,9 @@
 
         function exportRanking() {
             var rows = (window._rankExportRows || []).map(function(r) {
-                return [r.asin, r.title, r.brand, r.ordered_revenue, r.ordered_units, r.shipped_revenue, r.customer_returns];
+                return [r.asin, r.title, r.brand, r.ordered_revenue, Math.round(r.revenue_share * 10) / 10, r.ordered_units, r.shipped_revenue, r.customer_returns];
             });
-            exportToExcel(rows, ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Einheiten', 'Vers.-Umsatz', 'Rücksendungen'], 'Produkt-Ranking', 'Produkt-Ranking');
+            exportToExcel(rows, ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Anteil %', 'Einheiten', 'Vers.-Umsatz', 'Rücksendungen'], 'Produkt-Ranking', 'Produkt-Ranking');
         }
 
         /* ── E. Vorjahresvergleich (YoY) ── */
