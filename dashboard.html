@@ -232,7 +232,9 @@
         }
         .table-toolbar-sticky {
             position: sticky; top: 56px; z-index: 50;
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
+            padding-top: 8px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }
         .table-toolbar-left { display: flex; align-items: center; gap: 12px; }
         .table-count { font-size: 13px; color: var(--text-secondary); }
@@ -808,6 +810,7 @@
             if (tabEl) tabEl.classList.add('active');
             destroyAllCharts();
             renderActiveTab();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function getTabLabel(id) {
