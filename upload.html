@@ -496,6 +496,7 @@
                 var totalFiles = parsedFiles.length;
                 var uploaded = 0;
                 var errors = 0;
+                var errorDetails = [];
 
                 for (var fi = 0; fi < parsedFiles.length; fi++) {
                     var pf = parsedFiles[fi];
@@ -521,7 +522,7 @@
                         uploaded++;
                     } catch (e) {
                         errors++;
-                        showStatus('Fehler bei ' + pf.name + ': ' + e.message, 'error');
+                        errorDetails.push(pf.name + ': ' + e.message);
                     }
                     progressFill.style.width = Math.round(((fi + 1) / totalFiles) * 100) + '%';
                 }
@@ -534,7 +535,7 @@
                 btn.style.display = 'none';
 
                 var msg = uploaded + ' Report' + (uploaded !== 1 ? 's' : '') + ' hochgeladen.';
-                if (errors > 0) msg += ' ' + errors + ' Fehler.';
+                if (errors > 0) msg += ' ' + errors + ' Fehler: ' + errorDetails.join(' | ');
                 showStatus(msg, errors > 0 ? 'error' : 'success');
                 setTimeout(function() { progressBar.style.display = 'none'; }, 2000);
             });
