@@ -95,6 +95,14 @@
         }
         .status-msg.success { display: block; background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
         .status-msg.error { display: block; background: #fdd; color: var(--error); border: 1px solid var(--error); }
+        .status-msg.warning { display: block; background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        [data-theme="dark"] .status-msg.warning { background: #332d1a; color: #ffc107; border-color: #665a22; }
+        .file-status-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-left: 8px;
+        }
+        .file-status-badge.new { background: var(--success); color: #fff; }
+        .file-status-badge.overwrite { background: #e85d04; color: #fff; }
         .progress-bar {
             width: 100%; height: 6px; background: var(--border); border-radius: 3px;
             margin-top: 12px; display: none; overflow: hidden;
@@ -355,7 +363,8 @@
                     var fileMeta = {
                         periodStart: periodStart,
                         periodEnd: periodEnd,
-                        company: meta['Unternehmen'] || meta['Distributor'] || ''
+                        company: meta['Unternehmen'] || meta['Distributor'] || '',
+                        overlapStatus: 'checking'
                     };
 
                     // Check for duplicate file (same period)
@@ -375,17 +384,61 @@
                     renderFileList();
                     document.getElementById('uploadBtn').style.display = 'inline-block';
                     hideStatus();
+
+                    // Check for overlap with existing reports in DB
+                    checkOverlap(fileMeta);
                 };
                 reader.readAsArrayBuffer(file);
             }
+
+            async function checkOverlap(fileMeta) {
+                var clientId = document.getElementById('clientSelect').value;
+                if (!clientId) {
+                    fileMeta.overlapStatus = 'new';
+                    renderFileList();
+                    return;
+                }
+                var pStart = toISODate(fileMeta.periodStart);
+                var pEnd = toISODate(fileMeta.periodEnd);
+                var { data: existing } = await sb.from('vra_reports')
+                    .select('id')
+                    .eq('client_id', clientId)
+                    .eq('period_start', pStart)
+                    .eq('period_end', pEnd);
+
+                fileMeta.overlapStatus = (existing && existing.length > 0) ? 'overwrite' : 'new';
+                renderFileList();
+
+                // Show warning if any file overwrites
+                var hasOverwrite = parsedFiles.some(function(f) { return f.meta.overlapStatus === 'overwrite'; });
+                if (hasOverwrite) {
+                    showStatus('Hinweis: Für mindestens einen Zeitraum existiert bereits ein Report. Daten werden beim Upload überschrieben.', 'warning');
+                }
+            }
+
+            // Re-check overlaps when client changes
+            document.getElementById('clientSelect').addEventListener('change', function() {
+                parsedFiles.forEach(function(f) {
+                    f.meta.overlapStatus = 'checking';
+                    checkOverlap(f.meta);
+                });
+            });
 
             function renderFileList() {
                 var container = document.getElementById('fileList');
                 document.getElementById('fileInfo').style.display = 'block';
                 container.innerHTML = parsedFiles.map(function(f, idx) {
+                    var statusBadge = '';
+                    if (f.meta.overlapStatus === 'overwrite') {
+                        statusBadge = '<span class="file-status-badge overwrite">Überschreibt bestehenden Report</span>';
+                    } else if (f.meta.overlapStatus === 'new') {
+                        statusBadge = '<span class="file-status-badge new">Neu</span>';
+                    } else {
+                        statusBadge = '<span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">Prüfe...</span>';
+                    }
                     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">' +
                         '<div>' +
-                            '<div style="font-weight:600;font-size:14px;">' + f.name + '</div>' +
+                            '<div style="font-weight:600;font-size:14px;">' + f.name + statusBadge + '</div>' +
                             '<div style="font-size:12px;color:var(--text-secondary);">' +
                                 f.meta.periodStart.toLocaleDateString('de-DE') + ' – ' + f.meta.periodEnd.toLocaleDateString('de-DE') +
                                 ' · ' + f.data.length + ' Produkte' +

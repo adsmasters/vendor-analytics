@@ -365,6 +365,28 @@
         }
         .asin-link:hover { text-decoration: underline; }
 
+        /* Badges */
+        .badge-new {
+            display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            background: var(--success); color: #fff; margin-left: 6px; vertical-align: middle;
+        }
+        .badge-discontinued {
+            display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            background: var(--error); color: #fff; margin-left: 6px; vertical-align: middle;
+        }
+        .badge-count {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+            font-size: 11px; font-weight: 700; margin-left: 8px;
+        }
+        .badge-count.green { background: var(--success); color: #fff; }
+        .badge-count.red { background: var(--error); color: #fff; }
+
+        /* Overview table delta cells */
+        .delta-cell { font-size: 11px; }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -694,6 +716,9 @@
                 '<div id="tabOverview" class="tab-content' + (activeTab === 'overview' ? ' active' : '') + '">' +
                     '<div id="kpiSection"></div>' +
                     '<div id="trendSection"></div>' +
+                    '<div id="overviewTableSection"></div>' +
+                    '<div id="newAsinsSection"></div>' +
+                    '<div id="discontinuedAsinsSection"></div>' +
                 '</div>' +
                 '<div id="tabRanking" class="tab-content' + (activeTab === 'ranking' ? ' active' : '') + '">' +
                     '<div id="rankingSection"></div>' +
@@ -730,7 +755,7 @@
 
         function renderActiveTab() {
             switch (activeTab) {
-                case 'overview': renderKPIs(); renderTrendSection(); break;
+                case 'overview': renderKPIs(); renderTrendSection(); renderOverviewTable(); renderNewAsins(); renderDiscontinuedAsins(); break;
                 case 'ranking': renderRanking(); break;
                 case 'movers': renderTopMovers(); break;
                 case 'yoy': renderYoYSection(); break;
@@ -1990,6 +2015,192 @@
                 return [b.brand, b.revenue, b.units, Math.round(b.share * 10) / 10, Math.round(b.deltaPct * 10) / 10];
             });
             exportToExcel(rows, ['Brand', 'Umsatz', 'Einheiten', 'Anteil %', 'Delta % vs. Vormonat'], 'Brand-Analyse', 'Brand-Analyse');
+        }
+
+        /* ── H. Gesamt-Tabelle (Übersicht) ── */
+        function renderOverviewTable() {
+            var el = document.getElementById('overviewTableSection');
+            if (!el) return;
+            if (selectedMonths.length === 0) { el.innerHTML = ''; return; }
+
+            var monthsData = [];
+            selectedMonths.forEach(function(m) {
+                var data = getDataForMonth(m);
+                var ps = data.length > 0 ? data[0].period_start : m + '-01';
+                var sums = { ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_units: 0, customer_returns: 0 };
+                data.forEach(function(r) {
+                    sums.ordered_revenue += r.ordered_revenue || 0;
+                    sums.ordered_units += r.ordered_units || 0;
+                    sums.shipped_revenue += r.shipped_revenue || 0;
+                    sums.shipped_units += r.shipped_units || 0;
+                    sums.customer_returns += r.customer_returns || 0;
+                });
+                monthsData.push({ month: m, label: monthLabel(ps), sums: sums });
+            });
+
+            function deltaHtml(curr, prev, inverse) {
+                if (prev === 0) return '';
+                var pct = ((curr - prev) / prev) * 100;
+                var cls = pct > 0 ? 'val-positive' : pct < 0 ? 'val-negative' : '';
+                if (inverse) cls = pct > 0 ? 'val-negative' : pct < 0 ? 'val-positive' : '';
+                return '<div class="delta-cell ' + cls + '">' + (pct > 0 ? '+' : '') + fmtPct.format(pct) + ' %</div>';
+            }
+
+            var html = '<div class="section-card">' +
+                '<div class="section-header">' +
+                    '<h3>Monatsübersicht ' + infoIcon('ovtable', 'Monatsübersicht', 'Alle ausgewählten Monate mit KPIs und prozentualer Veränderung zum Vormonat.') + '</h3>' +
+                '</div>' +
+                '<div class="section-body">' +
+                '<div class="table-wrap"><table><thead><tr>' +
+                    '<th style="text-align:left;">Monat</th>' +
+                    '<th>Bestellungsumsatz</th>' +
+                    '<th>Bestellte Einheiten</th>' +
+                    '<th>Versandumsatz</th>' +
+                    '<th>Versandte Einheiten</th>' +
+                    '<th>Rücksendungen</th>' +
+                '</tr></thead><tbody>';
+
+            monthsData.forEach(function(md, idx) {
+                var prev = idx > 0 ? monthsData[idx - 1].sums : null;
+                html += '<tr>' +
+                    '<td style="text-align:left;font-weight:600;">' + md.label + '</td>' +
+                    '<td>' + formatEuro(md.sums.ordered_revenue) + (prev ? deltaHtml(md.sums.ordered_revenue, prev.ordered_revenue, false) : '') + '</td>' +
+                    '<td>' + formatInt(md.sums.ordered_units) + (prev ? deltaHtml(md.sums.ordered_units, prev.ordered_units, false) : '') + '</td>' +
+                    '<td>' + formatEuro(md.sums.shipped_revenue) + (prev ? deltaHtml(md.sums.shipped_revenue, prev.shipped_revenue, false) : '') + '</td>' +
+                    '<td>' + formatInt(md.sums.shipped_units) + (prev ? deltaHtml(md.sums.shipped_units, prev.shipped_units, false) : '') + '</td>' +
+                    '<td>' + formatInt(md.sums.customer_returns) + (prev ? deltaHtml(md.sums.customer_returns, prev.customer_returns, true) : '') + '</td>' +
+                    '</tr>';
+            });
+
+            html += '</tbody></table></div></div></div>';
+            el.innerHTML = html;
+        }
+
+        /* ── I. Neue ASINs ── */
+        function renderNewAsins() {
+            var el = document.getElementById('newAsinsSection');
+            if (!el) return;
+
+            var lastMonth = getLastMonth();
+            if (!lastMonth) { el.innerHTML = ''; return; }
+            var prevMonth = getPrevMonth(lastMonth);
+            if (!prevMonth) { el.innerHTML = ''; return; }
+
+            var lastData = getDataForMonth(lastMonth);
+            var prevData = getDataForMonth(prevMonth);
+
+            var prevAsins = {};
+            prevData.forEach(function(r) { if (r.asin) prevAsins[r.asin] = true; });
+
+            var newAsins = [];
+            lastData.forEach(function(r) {
+                if (r.asin && !prevAsins[r.asin]) {
+                    newAsins.push(r);
+                }
+            });
+
+            newAsins.sort(function(a, b) { return (b.ordered_revenue || 0) - (a.ordered_revenue || 0); });
+
+            var lastLabel = monthLabel(lastData.length > 0 ? lastData[0].period_start : lastMonth + '-01');
+
+            var html = '<div class="section-card">' +
+                '<div class="section-header">' +
+                    '<h3>Neue ASINs ' + infoIcon('newasins', 'Neue ASINs', 'ASINs die im aktuell letzten ausgewählten Monat neu erschienen sind und im Vormonat nicht vorhanden waren.') +
+                    '<span class="badge-count green">' + newAsins.length + '</span></h3>' +
+                    '<span style="font-size:12px;color:var(--text-secondary);">Neu in ' + lastLabel + '</span>' +
+                '</div>' +
+                '<div class="section-body">';
+
+            if (newAsins.length === 0) {
+                html += '<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Keine neuen ASINs in diesem Monat.</div>';
+            } else {
+                html += '<div class="table-wrap"><table><thead><tr>' +
+                    '<th style="text-align:left;">ASIN</th>' +
+                    '<th style="text-align:left;">Titel</th>' +
+                    '<th style="text-align:left;">Marke</th>' +
+                    '<th>Umsatz</th>' +
+                    '<th>Einheiten</th>' +
+                    '</tr></thead><tbody>';
+
+                newAsins.forEach(function(r) {
+                    html += '<tr>' +
+                        '<td style="text-align:left;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a><span class="badge-new">NEU</span></td>' +
+                        '<td style="text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis;" title="' + (r.title || '').replace(/"/g, '&quot;') + '">' + (r.title || '') + '</td>' +
+                        '<td style="text-align:left;color:var(--text-secondary);font-size:12px;">' + (r.brand || '') + '</td>' +
+                        '<td>' + formatEuro(r.ordered_revenue) + '</td>' +
+                        '<td>' + formatInt(r.ordered_units) + '</td>' +
+                        '</tr>';
+                });
+
+                html += '</tbody></table></div>';
+            }
+
+            html += '</div></div>';
+            el.innerHTML = html;
+        }
+
+        /* ── J. Entfallene ASINs ── */
+        function renderDiscontinuedAsins() {
+            var el = document.getElementById('discontinuedAsinsSection');
+            if (!el) return;
+
+            var lastMonth = getLastMonth();
+            if (!lastMonth) { el.innerHTML = ''; return; }
+            var prevMonth = getPrevMonth(lastMonth);
+            if (!prevMonth) { el.innerHTML = ''; return; }
+
+            var lastData = getDataForMonth(lastMonth);
+            var prevData = getDataForMonth(prevMonth);
+
+            var lastAsins = {};
+            lastData.forEach(function(r) { if (r.asin) lastAsins[r.asin] = true; });
+
+            var discontinued = [];
+            prevData.forEach(function(r) {
+                if (r.asin && !lastAsins[r.asin]) {
+                    discontinued.push(r);
+                }
+            });
+
+            discontinued.sort(function(a, b) { return (b.ordered_revenue || 0) - (a.ordered_revenue || 0); });
+
+            var lastLabel = monthLabel(lastData.length > 0 ? lastData[0].period_start : lastMonth + '-01');
+            var prevLabel = monthLabel(prevData.length > 0 ? prevData[0].period_start : prevMonth + '-01');
+
+            var html = '<div class="section-card">' +
+                '<div class="section-header">' +
+                    '<h3>Entfallene ASINs ' + infoIcon('discontasins', 'Entfallene ASINs', 'ASINs die im Vormonat vorhanden waren, aber im letzten ausgewählten Monat fehlen.') +
+                    '<span class="badge-count red">' + discontinued.length + '</span></h3>' +
+                    '<span style="font-size:12px;color:var(--text-secondary);">Fehlen in ' + lastLabel + ' (vorhanden in ' + prevLabel + ')</span>' +
+                '</div>' +
+                '<div class="section-body">';
+
+            if (discontinued.length === 0) {
+                html += '<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Keine entfallenen ASINs.</div>';
+            } else {
+                html += '<div class="table-wrap"><table><thead><tr>' +
+                    '<th style="text-align:left;">ASIN</th>' +
+                    '<th style="text-align:left;">Titel</th>' +
+                    '<th style="text-align:left;">Marke</th>' +
+                    '<th>Letzter Umsatz</th>' +
+                    '<th>Letzte Einheiten</th>' +
+                    '</tr></thead><tbody>';
+
+                discontinued.forEach(function(r) {
+                    html += '<tr>' +
+                        '<td style="text-align:left;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a><span class="badge-discontinued">ENTFALLEN</span></td>' +
+                        '<td style="text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis;" title="' + (r.title || '').replace(/"/g, '&quot;') + '">' + (r.title || '') + '</td>' +
+                        '<td style="text-align:left;color:var(--text-secondary);font-size:12px;">' + (r.brand || '') + '</td>' +
+                        '<td>' + formatEuro(r.ordered_revenue) + '</td>' +
+                        '<td>' + formatInt(r.ordered_units) + '</td>' +
+                        '</tr>';
+                });
+
+                html += '</tbody></table></div>';
+            }
+
+            html += '</div></div>';
+            el.innerHTML = html;
         }
 
         // Start

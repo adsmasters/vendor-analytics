@@ -116,13 +116,43 @@
         </div>
 
         <div class="help-card">
+            <h3>Report in Vendor Central finden</h3>
+            <p>So findest du den richtigen Report in Amazon Vendor Central:</p>
+            <ol>
+                <li>Melde dich in <strong>Amazon Vendor Central</strong> an.</li>
+                <li>Navigiere zu <strong>Reports</strong> in der oberen Navigation.</li>
+                <li>Wähle <strong>Retail Analytics</strong> aus.</li>
+                <li>Gehe zum Bereich <strong>Vertrieb</strong>.</li>
+                <li>Stelle den <strong>Zeitraum auf "Monat"</strong>.</li>
+                <li>Klicke auf <strong>Excel herunterladen</strong> um die .xlsx-Datei zu exportieren.</li>
+            </ol>
+            <p style="margin-top:12px;">
+                <strong>Pfad:</strong> Vendor Central &rarr; Reports &rarr; Retail Analytics &rarr; Vertrieb &rarr; Zeitraum auf "Monat" stellen &rarr; Excel herunterladen
+            </p>
+        </div>
+
+        <div class="help-card">
             <h3>So funktioniert's</h3>
             <ol>
                 <li><strong>Kunde anlegen:</strong> Gehe zu <a href="clients.html">Kunden</a> und erstelle einen neuen Kunden mit Name und Marketplace.</li>
-                <li><strong>Report herunterladen:</strong> Lade den "Retail Analytics" Report aus deinem Amazon Vendor Central als Excel-Datei (.xlsx) herunter.</li>
-                <li><strong>Report hochladen:</strong> Gehe zu <a href="upload.html">Upload</a>, wähle den Kunden aus und lade die Excel-Datei hoch. Der Zeitraum wird automatisch aus den Metadaten erkannt.</li>
+                <li><strong>Report herunterladen:</strong> Lade den Retail Analytics Report aus deinem Amazon Vendor Central als Excel-Datei (.xlsx) herunter (siehe oben).</li>
+                <li><strong>Report hochladen:</strong> Gehe zu <a href="upload.html">Upload</a>, wähle den Kunden aus und lade die Excel-Datei hoch. Der Zeitraum wird automatisch aus den Metadaten erkannt. Du kannst mehrere Dateien gleichzeitig hochladen.</li>
                 <li><strong>Analysieren:</strong> Im <a href="dashboard.html">Dashboard</a> siehst du KPIs, Trends, Produkt-Rankings und Monatsvergleiche.</li>
             </ol>
+        </div>
+
+        <div class="help-card">
+            <h3>Features im Dashboard</h3>
+            <ul>
+                <li><strong>Übersicht:</strong> KPI-Cards mit Bestellungsumsatz, Einheiten, Versandumsatz, Versandeinheiten und Rücksendungen. Flexibler Zeitraum-Vergleich mit frei wählbaren Perioden. Darunter die Monatsübersicht als Tabelle mit allen KPIs pro Monat und prozentualer Veränderung.</li>
+                <li><strong>Trend-Analyse:</strong> Balken-/Linien-Chart mit Bestellungsumsatz und bestellten Einheiten über alle ausgewählten Monate.</li>
+                <li><strong>Neue & entfallene ASINs:</strong> Erkennung von ASINs die im letzten Monat neu hinzugekommen sind oder im Vergleich zum Vormonat weggefallen sind.</li>
+                <li><strong>Produkt-Ranking:</strong> Sortierbare Tabelle aller ASINs mit Umsatz, Einheiten, Umsatzanteil und Rücksendungen. Suche nach ASIN, Titel oder Marke. Export als Excel.</li>
+                <li><strong>Top Movers:</strong> Vergleich zweier Monate mit Gewinnern und Verlierern nach Umsatz, Einheiten oder Rücksendungen. Visualisierung als Balkendiagramm und vollständige Vergleichstabelle.</li>
+                <li><strong>Vorjahresvergleich:</strong> Vergleich eines Monats mit dem gleichen Monat im Vorjahr. KPIs und ASIN-Level Vergleichstabelle.</li>
+                <li><strong>Brand-Analyse:</strong> Gruppierung aller Produkte nach Marke. Umsatzanteile, Trend-Chart der Top 5 Brands, und Drill-down auf einzelne Brand-Produkte.</li>
+                <li><strong>Produkt-Details:</strong> Klick auf eine ASIN öffnet die Detailseite mit monatlicher Entwicklung des einzelnen Produkts.</li>
+            </ul>
         </div>
 
         <div class="help-card">
@@ -140,13 +170,40 @@
 
             <div class="faq-item">
                 <div class="faq-q" onclick="toggleFaq(this)">
-                    <span>Was passiert bei einem Duplikat-Upload?</span>
+                    <span>Kann ich mehrere Monate gleichzeitig hochladen?</span>
                     <span class="faq-toggle">+</span>
                 </div>
                 <div class="faq-a">
-                    Wenn für den gleichen Kunden und Zeitraum bereits ein Report existiert, wirst du gefragt
-                    ob du die vorhandenen Daten überschreiben möchtest. Die alten Daten werden dann durch die
+                    Ja. Du kannst mehrere Excel-Dateien gleichzeitig per Drag & Drop oder über den Datei-Dialog
+                    auswählen. Jede Datei wird einzeln geparst und der Zeitraum automatisch erkannt. Alle Dateien
+                    werden dann zusammen hochgeladen.
+                </div>
+            </div>
+            <div class="divider"></div>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Was passiert bei doppeltem Upload?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Wenn für den gleichen Kunden und Zeitraum bereits ein Report existiert, werden die vorhandenen
+                    Daten automatisch überschrieben. Beim Hochladen wird dir in der Dateivorschau angezeigt, ob
+                    ein Report neu ist oder einen bestehenden überschreibt. Die alten Daten werden dann durch die
                     neuen ersetzt.
+                </div>
+            </div>
+            <div class="divider"></div>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Welches Dateiformat wird unterstützt?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Es wird ausschließlich das Excel-Format (.xlsx) unterstützt, wie es direkt aus Amazon
+                    Vendor Central Retail Analytics heruntergeladen wird. Die Datei muss die Standard-Metadaten
+                    in Zeile 1 und die üblichen Spaltenheader in Zeile 2 enthalten.
                 </div>
             </div>
             <div class="divider"></div>
@@ -170,9 +227,10 @@
                     <span class="faq-toggle">+</span>
                 </div>
                 <div class="faq-a">
-                    Top Movers vergleichen den aktuellsten Monat mit dem Vormonat. Produkte mit dem
-                    größten prozentualen Umsatzwachstum sind "Gewinner", solche mit dem größten
+                    Top Movers vergleichen zwei frei wählbare Monate. Produkte mit dem
+                    größten absoluten Wachstum sind "Gewinner", solche mit dem größten
                     Rückgang "Verlierer". Es werden nur ASINs berücksichtigt, die in beiden Monaten vorhanden sind.
+                    Du kannst nach Umsatz, Einheiten oder Rücksendungen filtern.
                 </div>
             </div>
             <div class="divider"></div>
@@ -183,7 +241,7 @@
                     <span class="faq-toggle">+</span>
                 </div>
                 <div class="faq-a">
-                    Ja. Im Dashboard kannst du im Zeitraum-Filter mehrere Monate auswählen (Strg/Cmd + Klick).
+                    Ja. Im Dashboard kannst du über die Zeitraum-Checkboxen beliebig viele Monate aus- oder abwählen.
                     Die KPIs und das Produkt-Ranking werden dann über den gesamten Zeitraum aggregiert.
                 </div>
             </div>
