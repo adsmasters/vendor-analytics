@@ -678,25 +678,35 @@
 
             var content = document.getElementById('dashboardContent');
 
-            // Period checkboxes
+            // Period range selector
+            var monthOptions = availableMonths.map(function(m) {
+                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                var label = ps ? monthLabel(ps.period_start) : m;
+                return { value: m, label: label };
+            });
+
+            if (!window._periodFrom || availableMonths.indexOf(window._periodFrom) === -1) window._periodFrom = availableMonths[0];
+            if (!window._periodTo || availableMonths.indexOf(window._periodTo) === -1) window._periodTo = availableMonths[availableMonths.length - 1];
+
+            // Update selectedMonths based on range
+            selectedMonths = availableMonths.filter(function(m) { return m >= window._periodFrom && m <= window._periodTo; });
+
+            var fromOpts = monthOptions.map(function(o) {
+                return '<option value="' + o.value + '"' + (o.value === window._periodFrom ? ' selected' : '') + '>' + o.label + '</option>';
+            }).join('');
+            var toOpts = monthOptions.map(function(o) {
+                return '<option value="' + o.value + '"' + (o.value === window._periodTo ? ' selected' : '') + '>' + o.label + '</option>';
+            }).join('');
+
             var periodHtml = '<div style="margin-bottom:24px;">' +
                 '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
                 '<span style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.3px;font-weight:600;">Zeitraum</span>' +
-                '<div class="period-checkboxes" id="periodCheckboxes">';
-
-            availableMonths.forEach(function(m) {
-                var checked = selectedMonths.indexOf(m) >= 0;
-                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
-                var label = ps ? monthLabel(ps.period_start) : m;
-                periodHtml += '<label class="period-cb-label' + (checked ? ' checked' : '') + '">' +
-                    '<input type="checkbox" value="' + m + '"' + (checked ? ' checked' : '') + ' onchange="toggleMonth(this)"> ' + label + '</label>';
-            });
-
-            periodHtml += '</div>' +
-                '<div class="period-actions">' +
+                '<select class="filter-select" onchange="changePeriodFrom(this.value)">' + fromOpts + '</select>' +
+                '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
+                '<select class="filter-select" onchange="changePeriodTo(this.value)">' + toOpts + '</select>' +
                 '<button class="period-action-btn" onclick="selectAllMonths()">Alle</button>' +
-                '<button class="period-action-btn" onclick="selectNoMonths()">Keine</button>' +
-                '</div></div></div>';
+                '<span style="font-size:12px;color:var(--text-secondary);">' + selectedMonths.length + ' von ' + availableMonths.length + ' Monaten</span>' +
+                '</div></div>';
 
             // Tab bar
             var tabs = [
@@ -765,32 +775,26 @@
         }
 
         /* ── Month selection ── */
-        function toggleMonth(cb) {
-            var val = cb.value;
-            var idx = selectedMonths.indexOf(val);
-            if (cb.checked && idx < 0) selectedMonths.push(val);
-            if (!cb.checked && idx >= 0) selectedMonths.splice(idx, 1);
-            selectedMonths.sort();
-            cb.parentElement.classList.toggle('checked', cb.checked);
-            onMonthChange();
-        }
+        window.changePeriodFrom = function(val) {
+            window._periodFrom = val;
+            if (window._periodTo < val) window._periodTo = val;
+            selectedMonths = availableMonths.filter(function(m) { return m >= window._periodFrom && m <= window._periodTo; });
+            destroyAllCharts();
+            render();
+        };
+        window.changePeriodTo = function(val) {
+            window._periodTo = val;
+            if (window._periodFrom > val) window._periodFrom = val;
+            selectedMonths = availableMonths.filter(function(m) { return m >= window._periodFrom && m <= window._periodTo; });
+            destroyAllCharts();
+            render();
+        };
         function selectAllMonths() {
+            window._periodFrom = availableMonths[0];
+            window._periodTo = availableMonths[availableMonths.length - 1];
             selectedMonths = availableMonths.slice();
-            updatePeriodUI();
-            onMonthChange();
-        }
-        function selectNoMonths() {
-            selectedMonths = [];
-            updatePeriodUI();
-            onMonthChange();
-        }
-        function updatePeriodUI() {
-            document.querySelectorAll('#periodCheckboxes .period-cb-label').forEach(function(lbl) {
-                var cb = lbl.querySelector('input');
-                var checked = selectedMonths.indexOf(cb.value) >= 0;
-                cb.checked = checked;
-                lbl.classList.toggle('checked', checked);
-            });
+            destroyAllCharts();
+            render();
         }
         function onMonthChange() {
             destroyAllCharts();
