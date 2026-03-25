@@ -156,7 +156,7 @@
     <div class="container">
         <div class="section-header">
             <h2>Report hochladen</h2>
-            <p>Lade einen Amazon Vendor Retail Analytics Report (Excel) hoch.</p>
+            <p>Lade einen oder mehrere Amazon Vendor Retail Analytics Reports (Excel) hoch.</p>
         </div>
 
         <div class="form-group">
@@ -171,15 +171,10 @@
             <div class="dropzone-text">Excel-Datei hierher ziehen oder klicken</div>
             <div class="dropzone-hint">.xlsx oder .xls</div>
         </div>
-        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" multiple>
 
         <div class="file-info" id="fileInfo">
-            <div class="file-name" id="fileName"></div>
-            <div class="file-meta">
-                <span id="filePeriod"></span>
-                <span id="fileRows"></span>
-                <span id="fileCompany"></span>
-            </div>
+            <div id="fileList"></div>
         </div>
 
         <div class="progress-bar" id="progressBar">
@@ -209,8 +204,7 @@
             var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxncm5taXN6aGhhaGZjbWN0bXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NjE2NDksImV4cCI6MjA4OTIzNzY0OX0.FDZRGMESves7XbAMs_oMLWmvnywMlVqe8p7f1kt06qk';
             var sb = supabase.createClient(SB_URL, SB_KEY);
 
-            var parsedData = null;
-            var parsedMeta = null;
+            var parsedFiles = []; // Array of {name, data, meta}
             var duplicateReportId = null;
 
             function updateThemeIcon() {
@@ -258,11 +252,17 @@
             dropzone.addEventListener('drop', function(e) {
                 e.preventDefault();
                 dropzone.classList.remove('dragover');
-                if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+                handleFiles(e.dataTransfer.files);
             });
             fileInput.addEventListener('change', function() {
-                if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+                handleFiles(fileInput.files);
             });
+
+            function handleFiles(fileList) {
+                for (var i = 0; i < fileList.length; i++) {
+                    handleFile(fileList[i]);
+                }
+            }
 
             function parseDateDE(s) {
                 var parts = s.trim().split('.');
@@ -352,24 +352,60 @@
                         });
                     }
 
-                    parsedData = rows;
-                    parsedMeta = {
+                    var fileMeta = {
                         periodStart: periodStart,
                         periodEnd: periodEnd,
                         company: meta['Unternehmen'] || meta['Distributor'] || ''
                     };
 
-                    document.getElementById('fileInfo').style.display = 'block';
-                    document.getElementById('fileName').textContent = file.name;
-                    document.getElementById('filePeriod').textContent = 'Zeitraum: ' +
-                        periodStart.toLocaleDateString('de-DE') + ' – ' + periodEnd.toLocaleDateString('de-DE');
-                    document.getElementById('fileRows').textContent = rows.length + ' Produkte';
-                    document.getElementById('fileCompany').textContent = parsedMeta.company;
+                    // Check for duplicate file (same period)
+                    var dupIdx = parsedFiles.findIndex(function(f) {
+                        return f.meta.periodStart.getTime() === periodStart.getTime() &&
+                               f.meta.periodEnd.getTime() === periodEnd.getTime();
+                    });
+                    if (dupIdx >= 0) {
+                        parsedFiles[dupIdx] = { name: file.name, data: rows, meta: fileMeta };
+                    } else {
+                        parsedFiles.push({ name: file.name, data: rows, meta: fileMeta });
+                    }
+
+                    // Sort by period
+                    parsedFiles.sort(function(a, b) { return a.meta.periodStart - b.meta.periodStart; });
+
+                    renderFileList();
                     document.getElementById('uploadBtn').style.display = 'inline-block';
                     hideStatus();
                 };
                 reader.readAsArrayBuffer(file);
             }
+
+            function renderFileList() {
+                var container = document.getElementById('fileList');
+                document.getElementById('fileInfo').style.display = 'block';
+                container.innerHTML = parsedFiles.map(function(f, idx) {
+                    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">' +
+                        '<div>' +
+                            '<div style="font-weight:600;font-size:14px;">' + f.name + '</div>' +
+                            '<div style="font-size:12px;color:var(--text-secondary);">' +
+                                f.meta.periodStart.toLocaleDateString('de-DE') + ' – ' + f.meta.periodEnd.toLocaleDateString('de-DE') +
+                                ' · ' + f.data.length + ' Produkte' +
+                                (f.meta.company ? ' · ' + f.meta.company : '') +
+                            '</div>' +
+                        '</div>' +
+                        '<button onclick="removeFile(' + idx + ')" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:16px;">✕</button>' +
+                    '</div>';
+                }).join('');
+            }
+
+            window.removeFile = function(idx) {
+                parsedFiles.splice(idx, 1);
+                if (parsedFiles.length === 0) {
+                    document.getElementById('fileInfo').style.display = 'none';
+                    document.getElementById('uploadBtn').style.display = 'none';
+                } else {
+                    renderFileList();
+                }
+            };
 
             function showStatus(msg, type) {
                 var el = document.getElementById('statusMsg');
@@ -391,83 +427,80 @@
                     showStatus('Bitte einen Kunden auswählen.', 'error');
                     return;
                 }
-                if (!parsedData || parsedData.length === 0) {
-                    showStatus('Keine Daten zum Hochladen.', 'error');
+                if (parsedFiles.length === 0) {
+                    showStatus('Keine Dateien zum Hochladen.', 'error');
                     return;
                 }
 
-                var pStart = toISODate(parsedMeta.periodStart);
-                var pEnd = toISODate(parsedMeta.periodEnd);
-
-                var { data: existing } = await sb.from('vra_reports')
-                    .select('id')
-                    .eq('client_id', clientId)
-                    .eq('period_start', pStart)
-                    .eq('period_end', pEnd);
-
-                if (existing && existing.length > 0) {
-                    duplicateReportId = existing[0].id;
-                    document.getElementById('duplicateModal').classList.add('open');
-                    return;
-                }
-
-                await doUpload(clientId, pStart, pEnd, null);
-            });
-
-            document.getElementById('dupCancel').addEventListener('click', function() {
-                document.getElementById('duplicateModal').classList.remove('open');
-                duplicateReportId = null;
-            });
-
-            document.getElementById('dupOverwrite').addEventListener('click', async function() {
-                document.getElementById('duplicateModal').classList.remove('open');
-                var clientId = document.getElementById('clientSelect').value;
-                var pStart = toISODate(parsedMeta.periodStart);
-                var pEnd = toISODate(parsedMeta.periodEnd);
-                await doUpload(clientId, pStart, pEnd, duplicateReportId);
-                duplicateReportId = null;
-            });
-
-            async function doUpload(clientId, pStart, pEnd, existingReportId) {
-                var btn = document.getElementById('uploadBtn');
+                var btn = this;
                 btn.disabled = true;
                 btn.textContent = 'Wird hochgeladen...';
-
                 var progressBar = document.getElementById('progressBar');
                 var progressFill = document.getElementById('progressFill');
                 progressBar.style.display = 'block';
-                progressFill.style.width = '10%';
 
+                var totalFiles = parsedFiles.length;
+                var uploaded = 0;
+                var errors = 0;
+
+                for (var fi = 0; fi < parsedFiles.length; fi++) {
+                    var pf = parsedFiles[fi];
+                    var pStart = toISODate(pf.meta.periodStart);
+                    var pEnd = toISODate(pf.meta.periodEnd);
+                    progressFill.style.width = Math.round(((fi) / totalFiles) * 100) + '%';
+
+                    // Check for existing report
+                    var { data: existing } = await sb.from('vra_reports')
+                        .select('id')
+                        .eq('client_id', clientId)
+                        .eq('period_start', pStart)
+                        .eq('period_end', pEnd);
+
+                    var existingId = (existing && existing.length > 0) ? existing[0].id : null;
+                    if (existingId) {
+                        await sb.from('vra_data').delete().eq('report_id', existingId);
+                        await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingId);
+                    }
+
+                    try {
+                        await doUploadSingle(clientId, pStart, pEnd, existingId, pf.data);
+                        uploaded++;
+                    } catch (e) {
+                        errors++;
+                    }
+                    progressFill.style.width = Math.round(((fi + 1) / totalFiles) * 100) + '%';
+                }
+
+                progressFill.style.width = '100%';
+                btn.disabled = false;
+                btn.textContent = 'Hochladen';
+                parsedFiles = [];
+                document.getElementById('fileInfo').style.display = 'none';
+                btn.style.display = 'none';
+
+                var msg = uploaded + ' Report' + (uploaded !== 1 ? 's' : '') + ' hochgeladen.';
+                if (errors > 0) msg += ' ' + errors + ' Fehler.';
+                showStatus(msg, errors > 0 ? 'error' : 'success');
+                setTimeout(function() { progressBar.style.display = 'none'; }, 2000);
+            });
+
+            async function doUploadSingle(clientId, pStart, pEnd, existingReportId, rows) {
                 var reportId = existingReportId;
 
-                if (existingReportId) {
-                    await sb.from('vra_data').delete().eq('report_id', existingReportId);
-                    await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingReportId);
-                    progressFill.style.width = '20%';
-                } else {
+                if (!existingReportId) {
                     var { data: rep, error: repErr } = await sb.from('vra_reports').insert({
                         client_id: clientId,
                         period_start: pStart,
                         period_end: pEnd
                     }).select('id').single();
 
-                    if (repErr) {
-                        showStatus('Fehler beim Erstellen des Reports: ' + repErr.message, 'error');
-                        btn.disabled = false;
-                        btn.textContent = 'Hochladen';
-                        progressBar.style.display = 'none';
-                        return;
-                    }
+                    if (repErr) throw new Error(repErr.message);
                     reportId = rep.id;
-                    progressFill.style.width = '20%';
                 }
 
                 var batchSize = 100;
-                var total = parsedData.length;
-                var inserted = 0;
-
-                for (var i = 0; i < total; i += batchSize) {
-                    var batch = parsedData.slice(i, i + batchSize).map(function(row) {
+                for (var i = 0; i < rows.length; i += batchSize) {
+                    var batch = rows.slice(i, i + batchSize).map(function(row) {
                         return {
                             report_id: reportId,
                             client_id: clientId,
@@ -486,26 +519,8 @@
                     });
 
                     var { error: insertErr } = await sb.from('vra_data').insert(batch);
-                    if (insertErr) {
-                        showStatus('Fehler beim Speichern (Zeile ' + (i + 1) + '): ' + insertErr.message, 'error');
-                        btn.disabled = false;
-                        btn.textContent = 'Hochladen';
-                        progressBar.style.display = 'none';
-                        return;
-                    }
-                    inserted += batch.length;
-                    var pct = 20 + Math.round((inserted / total) * 80);
-                    progressFill.style.width = pct + '%';
+                    if (insertErr) throw new Error(insertErr.message);
                 }
-
-                progressFill.style.width = '100%';
-                showStatus(inserted + ' Produkte erfolgreich hochgeladen.', 'success');
-                btn.disabled = false;
-                btn.textContent = 'Hochladen';
-
-                parsedData = null;
-                parsedMeta = null;
-                document.getElementById('fileInfo').style.display = 'none';
                 btn.style.display = 'none';
                 fileInput.value = '';
             }
