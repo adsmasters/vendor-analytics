@@ -6,6 +6,7 @@
     <title>Vendor Analytics — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         /* Theme variables — Light (default) */
         :root {
@@ -323,6 +324,47 @@
         .top-mover-chart-title .dot.red { background: var(--error); }
         @media (max-width: 700px) { .top-mover-charts { grid-template-columns: 1fr; } }
 
+        /* Tabs */
+        .tab-bar {
+            display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--border);
+            overflow-x: auto;
+        }
+        .tab-btn {
+            background: transparent; border: none; border-bottom: 2px solid transparent;
+            color: var(--text-secondary); font-size: 13px; font-weight: 600;
+            padding: 10px 18px; cursor: pointer; white-space: nowrap;
+            margin-bottom: -2px; transition: color 0.2s, border-color 0.2s;
+        }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Export button */
+        .btn-export {
+            background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .btn-export:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--text-secondary); }
+
+        /* Filter select (generic) */
+        .filter-select {
+            background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary);
+            padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 8px center;
+            padding-right: 28px;
+        }
+
+        /* ASIN link */
+        .asin-link {
+            color: var(--accent); text-decoration: none; font-family: monospace; font-size: 12px;
+        }
+        .asin-link:hover { text-decoration: underline; }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -394,9 +436,8 @@
             document.documentElement.setAttribute('data-theme', next);
             localStorage.setItem('vra_theme', next);
             updateThemeIcon(next);
-            if (trendChartInstance) renderTrendChart();
-            if (winnersChartInstance) renderTopMoverCharts();
-            if (losersChartInstance) renderTopMoverCharts();
+            destroyAllCharts();
+            renderActiveTab();
         }
 
         function updateThemeIcon(theme) {
@@ -422,9 +463,15 @@
         var allData = [];
         var selectedMonths = [];
         var availableMonths = [];
+        var activeTab = 'overview';
+
+        // Chart instances
         var trendChartInstance = null;
         var winnersChartInstance = null;
         var losersChartInstance = null;
+        var brandTrendChartInstance = null;
+        var brandBarChartInstance = null;
+        var yoyChartInstance = null;
 
         // Ranking table state
         var rankSortCol = 'ordered_revenue';
@@ -432,11 +479,26 @@
         var rankSearch = '';
         var rankDisplayCount = 50;
 
+        // Top Movers state
+        var moverTopN = 10;
+        var moverMetric = 'ordered_revenue';
+
         // Comparison table state
         var compareMonthA = null;
         var compareMonthB = null;
         var compareSortCol = 'delta_rev';
         var compareSortDir = 'desc';
+
+        // Brand state
+        var brandSortCol = 'revenue';
+        var brandSortDir = 'desc';
+        var selectedBrand = '';
+        var brandTrendChartBrands = [];
+
+        // YoY state
+        var yoySortCol = 'delta_rev';
+        var yoySortDir = 'desc';
+        var yoyMonth = null;
 
         /* ── Formatters ── */
         var fmtCurrency = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
@@ -450,12 +512,22 @@
 
         function monthLabel(ps) {
             var d = new Date(ps);
-            var months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+            var months = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
             return months[d.getMonth()] + ' ' + d.getFullYear();
         }
 
         function monthSortKey(ps) {
             return ps.substring(0, 7);
+        }
+
+        function getClientName() {
+            var c = clients.find(function(c) { return c.id === selectedClientId; });
+            return c ? c.name : 'Unbekannt';
+        }
+
+        function todayStr() {
+            var d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
         }
 
         /* ── Info icons ── */
@@ -482,11 +554,31 @@
             window.location.href = 'index.html';
         }
 
+        /* ── Destroy all charts ── */
+        function destroyAllCharts() {
+            if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
+            if (winnersChartInstance) { winnersChartInstance.destroy(); winnersChartInstance = null; }
+            if (losersChartInstance) { losersChartInstance.destroy(); losersChartInstance = null; }
+            if (brandTrendChartInstance) { brandTrendChartInstance.destroy(); brandTrendChartInstance = null; }
+            if (brandBarChartInstance) { brandBarChartInstance.destroy(); brandBarChartInstance = null; }
+            if (yoyChartInstance) { yoyChartInstance.destroy(); yoyChartInstance = null; }
+        }
+
+        /* ── Excel Export ── */
+        function exportToExcel(rows, headers, sheetName, sectionName) {
+            var ws_data = [headers];
+            rows.forEach(function(r) { ws_data.push(r); });
+            var ws = XLSX.utils.aoa_to_sheet(ws_data);
+            var wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Daten');
+            var fileName = 'Vendor-Analytics_' + getClientName().replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, '_') + '_' + sectionName + '_' + todayStr() + '.xlsx';
+            XLSX.writeFile(wb, fileName);
+        }
+
         /* ── Init ── */
         async function init() {
             var app = document.getElementById('app');
 
-            // Load clients
             var res = await sb.from('vra_clients').select('*').order('name');
             clients = res.data || [];
 
@@ -495,7 +587,6 @@
                 return;
             }
 
-            // Determine selected client
             var urlParams = new URLSearchParams(window.location.search);
             var urlClient = urlParams.get('client');
             if (urlClient) {
@@ -504,7 +595,6 @@
                 selectedClientId = localStorage.getItem('vra_active_client') || clients[0].id;
             }
 
-            // Validate client exists
             if (!clients.find(function(c) { return c.id === selectedClientId; })) {
                 selectedClientId = clients[0].id;
             }
@@ -516,7 +606,6 @@
         async function loadClientData() {
             var app = document.getElementById('app');
 
-            // Load reports
             var res = await sb.from('vra_reports').select('*').eq('client_id', selectedClientId).order('period_start', { ascending: true });
             reports = res.data || [];
 
@@ -526,7 +615,6 @@
                 return;
             }
 
-            // Load all data rows (paginated)
             allData = [];
             var from = 0;
             var batchSize = 1000;
@@ -538,7 +626,6 @@
                 from += batchSize;
             }
 
-            // Build available months
             var monthSet = {};
             allData.forEach(function(r) {
                 var key = monthSortKey(r.period_start);
@@ -590,18 +677,71 @@
                 '<button class="period-action-btn" onclick="selectNoMonths()">Keine</button>' +
                 '</div></div></div>';
 
-            content.innerHTML = periodHtml +
-                '<div id="kpiSection"></div>' +
-                '<div id="trendSection"></div>' +
-                '<div id="topMoverSection"></div>' +
-                '<div id="rankingSection"></div>' +
-                '<div id="compareSection"></div>';
+            // Tab bar
+            var tabs = [
+                { id: 'overview', label: 'Übersicht' },
+                { id: 'ranking', label: 'Produkt-Ranking' },
+                { id: 'movers', label: 'Top Movers' },
+                { id: 'compare', label: 'Monatsvergleich' },
+                { id: 'yoy', label: 'Vorjahresvergleich' },
+                { id: 'brand', label: 'Brand-Analyse' }
+            ];
+            var tabBarHtml = '<div class="tab-bar">';
+            tabs.forEach(function(t) {
+                tabBarHtml += '<button class="tab-btn' + (activeTab === t.id ? ' active' : '') + '" onclick="switchTab(\'' + t.id + '\')">' + t.label + '</button>';
+            });
+            tabBarHtml += '</div>';
 
-            renderKPIs();
-            renderTrendSection();
-            renderTopMovers();
-            renderRanking();
-            renderCompareSection();
+            content.innerHTML = periodHtml + tabBarHtml +
+                '<div id="tabOverview" class="tab-content' + (activeTab === 'overview' ? ' active' : '') + '">' +
+                    '<div id="kpiSection"></div>' +
+                    '<div id="trendSection"></div>' +
+                '</div>' +
+                '<div id="tabRanking" class="tab-content' + (activeTab === 'ranking' ? ' active' : '') + '">' +
+                    '<div id="rankingSection"></div>' +
+                '</div>' +
+                '<div id="tabMovers" class="tab-content' + (activeTab === 'movers' ? ' active' : '') + '">' +
+                    '<div id="topMoverSection"></div>' +
+                '</div>' +
+                '<div id="tabCompare" class="tab-content' + (activeTab === 'compare' ? ' active' : '') + '">' +
+                    '<div id="compareSection"></div>' +
+                '</div>' +
+                '<div id="tabYoy" class="tab-content' + (activeTab === 'yoy' ? ' active' : '') + '">' +
+                    '<div id="yoySection"></div>' +
+                '</div>' +
+                '<div id="tabBrand" class="tab-content' + (activeTab === 'brand' ? ' active' : '') + '">' +
+                    '<div id="brandSection"></div>' +
+                '</div>';
+
+            renderActiveTab();
+        }
+
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.textContent === getTabLabel(tabId));
+            });
+            document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+            var tabEl = document.getElementById('tab' + tabId.charAt(0).toUpperCase() + tabId.slice(1));
+            if (tabEl) tabEl.classList.add('active');
+            destroyAllCharts();
+            renderActiveTab();
+        }
+
+        function getTabLabel(id) {
+            var map = { overview: 'Übersicht', ranking: 'Produkt-Ranking', movers: 'Top Movers', compare: 'Monatsvergleich', yoy: 'Vorjahresvergleich', brand: 'Brand-Analyse' };
+            return map[id] || id;
+        }
+
+        function renderActiveTab() {
+            switch (activeTab) {
+                case 'overview': renderKPIs(); renderTrendSection(); break;
+                case 'ranking': renderRanking(); break;
+                case 'movers': renderTopMovers(); break;
+                case 'compare': renderCompareSection(); break;
+                case 'yoy': renderYoYSection(); break;
+                case 'brand': renderBrandSection(); break;
+            }
             initInfoIcons();
         }
 
@@ -634,21 +774,15 @@
             });
         }
         function onMonthChange() {
-            renderKPIs();
-            renderTrendSection();
-            renderTopMovers();
-            renderRanking();
-            renderCompareSection();
-            initInfoIcons();
+            destroyAllCharts();
+            renderActiveTab();
         }
 
         /* ── Client switching ── */
         function switchClient(id) {
             selectedClientId = id;
             localStorage.setItem('vra_active_client', id);
-            trendChartInstance = null;
-            winnersChartInstance = null;
-            losersChartInstance = null;
+            destroyAllCharts();
             document.getElementById('app').innerHTML = '<div class="skeleton-wrap"><div class="skeleton-header"><div class="skeleton-block skeleton-text-lg"></div></div><div class="skeleton-kpi-grid"><div class="skeleton-block skeleton-kpi"></div><div class="skeleton-block skeleton-kpi"></div><div class="skeleton-block skeleton-kpi"></div><div class="skeleton-block skeleton-kpi"></div><div class="skeleton-block skeleton-kpi"></div></div><div class="skeleton-block skeleton-chart"></div><div class="skeleton-block skeleton-table"></div></div>';
             loadClientData();
         }
@@ -669,9 +803,24 @@
             return idx > 0 ? availableMonths[idx - 1] : null;
         }
 
+        function getMetricLabel(key) {
+            var map = {
+                ordered_revenue: 'Umsatz',
+                ordered_units: 'Einheiten',
+                customer_returns: 'Rücksendungen'
+            };
+            return map[key] || key;
+        }
+
+        function getMetricFormatter(key) {
+            if (key === 'ordered_revenue' || key === 'shipped_revenue') return formatEuro;
+            return formatInt;
+        }
+
         /* ── A. KPI Section ── */
         function renderKPIs() {
             var el = document.getElementById('kpiSection');
+            if (!el) return;
             var lastMonth = getLastMonth();
             if (!lastMonth) { el.innerHTML = ''; return; }
 
@@ -693,7 +842,6 @@
                 var prev = prevData.reduce(function(s, r) { return s + (r[kpi.key] || 0); }, 0);
                 var diff = prev ? ((curr - prev) / prev) * 100 : 0;
                 var diffClass = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
-                // Returns: green up = good for revenue/units, red up = bad for returns
                 if (kpi.key === 'customer_returns') {
                     diffClass = diff > 0 ? 'negative' : diff < 0 ? 'positive' : 'neutral';
                 }
@@ -713,6 +861,7 @@
         /* ── B. Trend Chart ── */
         function renderTrendSection() {
             var el = document.getElementById('trendSection');
+            if (!el) return;
             if (selectedMonths.length === 0) { el.innerHTML = ''; return; }
 
             el.innerHTML =
@@ -813,56 +962,72 @@
             });
         }
 
-        /* ── D. Top Movers ── */
+        /* ── C. Top Movers ── */
         function renderTopMovers() {
             var el = document.getElementById('topMoverSection');
+            if (!el) return;
             var lastMonth = getLastMonth();
             var prevMonth = lastMonth ? getPrevMonth(lastMonth) : null;
 
             if (!lastMonth || !prevMonth) {
-                el.innerHTML = '';
+                el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Mindestens zwei Monate benötigt für Top Movers.</div></div>';
                 return;
             }
 
             var lastData = getDataForMonth(lastMonth);
             var prevData = getDataForMonth(prevMonth);
 
-            // Build maps by ASIN
             var lastMap = {};
             lastData.forEach(function(r) { if (r.asin) lastMap[r.asin] = r; });
             var prevMap = {};
             prevData.forEach(function(r) { if (r.asin) prevMap[r.asin] = r; });
 
-            // Find ASINs in both months with min threshold
+            var metricKey = moverMetric;
+            var metricFmt = getMetricFormatter(metricKey);
+            var metricLbl = getMetricLabel(metricKey);
+            var minThreshold = metricKey === 'ordered_revenue' ? 100 : 1;
+
             var movers = [];
             Object.keys(lastMap).forEach(function(asin) {
                 if (!prevMap[asin]) return;
-                var currRev = lastMap[asin].ordered_revenue || 0;
-                var prevRev = prevMap[asin].ordered_revenue || 0;
-                if (currRev < 100 && prevRev < 100) return;
-                var deltaEur = currRev - prevRev;
-                var deltaPct = prevRev ? ((currRev - prevRev) / prevRev) * 100 : 0;
+                var currVal = lastMap[asin][metricKey] || 0;
+                var prevVal = prevMap[asin][metricKey] || 0;
+                if (currVal < minThreshold && prevVal < minThreshold) return;
+                var deltaAbs = currVal - prevVal;
+                var deltaPct = prevVal ? ((currVal - prevVal) / prevVal) * 100 : 0;
                 movers.push({
                     asin: asin,
                     title: lastMap[asin].title || '',
-                    currRev: currRev,
-                    prevRev: prevRev,
-                    deltaEur: deltaEur,
+                    currVal: currVal,
+                    prevVal: prevVal,
+                    deltaAbs: deltaAbs,
                     deltaPct: deltaPct
                 });
             });
 
-            // Sort by deltaEur
-            var winners = movers.filter(function(m) { return m.deltaEur > 0; }).sort(function(a, b) { return b.deltaEur - a.deltaEur; }).slice(0, 10);
-            var losers = movers.filter(function(m) { return m.deltaEur < 0; }).sort(function(a, b) { return a.deltaEur - b.deltaEur; }).slice(0, 10);
+            var winners = movers.filter(function(m) { return m.deltaAbs > 0; }).sort(function(a, b) { return b.deltaAbs - a.deltaAbs; }).slice(0, moverTopN);
+            var losers = movers.filter(function(m) { return m.deltaAbs < 0; }).sort(function(a, b) { return a.deltaAbs - b.deltaAbs; }).slice(0, moverTopN);
 
             var lastLabel = monthLabel(lastData.length > 0 ? lastData[0].period_start : lastMonth);
             var prevLabel = monthLabel(prevData.length > 0 ? prevData[0].period_start : prevMonth);
 
             var html = '<div class="section-card">' +
                 '<div class="section-header">' +
-                    '<h3>Top Movers ' + infoIcon('movers', 'Top Movers', 'Vergleich ' + prevLabel + ' vs. ' + lastLabel + '.<br>Nur ASINs die in beiden Monaten existieren und mind. 100 EUR Umsatz haben.') + '</h3>' +
-                    '<span style="font-size:12px;color:var(--text-secondary);">' + prevLabel + ' &rarr; ' + lastLabel + '</span>' +
+                    '<h3>Top Movers ' + infoIcon('movers', 'Top Movers', 'Vergleich ' + prevLabel + ' vs. ' + lastLabel + '.<br>Nur ASINs die in beiden Monaten existieren.') + '</h3>' +
+                    '<div style="display:flex;align-items:center;gap:8px;">' +
+                        '<select class="filter-select" onchange="changeMoverTopN(this.value)">' +
+                            '<option value="10"' + (moverTopN === 10 ? ' selected' : '') + '>Top 10</option>' +
+                            '<option value="20"' + (moverTopN === 20 ? ' selected' : '') + '>Top 20</option>' +
+                            '<option value="50"' + (moverTopN === 50 ? ' selected' : '') + '>Top 50</option>' +
+                        '</select>' +
+                        '<select class="filter-select" onchange="changeMoverMetric(this.value)">' +
+                            '<option value="ordered_revenue"' + (moverMetric === 'ordered_revenue' ? ' selected' : '') + '>Nach Umsatz</option>' +
+                            '<option value="ordered_units"' + (moverMetric === 'ordered_units' ? ' selected' : '') + '>Nach Einheiten</option>' +
+                            '<option value="customer_returns"' + (moverMetric === 'customer_returns' ? ' selected' : '') + '>Nach Rücksendungen</option>' +
+                        '</select>' +
+                        '<button class="btn-export" onclick="exportTopMovers()">&#8681; Export</button>' +
+                        '<span style="font-size:12px;color:var(--text-secondary);">' + prevLabel + ' &rarr; ' + lastLabel + '</span>' +
+                    '</div>' +
                 '</div>' +
                 '<div class="section-body">';
 
@@ -870,18 +1035,18 @@
             html += '<div class="top-mover-grid">';
 
             // Winners
-            html += '<div class="top-mover-card"><div class="top-mover-title winners">Top 10 Gewinner</div>';
+            html += '<div class="top-mover-card"><div class="top-mover-title winners">Top ' + moverTopN + ' Gewinner (' + metricLbl + ')</div>';
             if (winners.length === 0) {
                 html += '<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Keine Gewinner</div>';
             } else {
                 winners.forEach(function(m) {
                     html += '<div class="top-mover-row">' +
                         '<div style="display:flex;align-items:center;overflow:hidden;flex:1;">' +
-                            '<span class="top-mover-asin">' + m.asin + '</span>' +
+                            '<a href="product.html?client=' + selectedClientId + '&asin=' + m.asin + '" class="asin-link">' + m.asin + '</a>' +
                             '<span class="top-mover-title-text">' + m.title + '</span>' +
                         '</div>' +
                         '<div class="top-mover-vals">' +
-                            '<span class="top-mover-abs">+' + formatEuro(m.deltaEur) + '</span>' +
+                            '<span class="top-mover-abs">+' + metricFmt(m.deltaAbs) + '</span>' +
                             '<span class="top-mover-pct positive">+' + fmtPct.format(m.deltaPct) + ' %</span>' +
                         '</div></div>';
                 });
@@ -889,18 +1054,18 @@
             html += '</div>';
 
             // Losers
-            html += '<div class="top-mover-card"><div class="top-mover-title losers">Top 10 Verlierer</div>';
+            html += '<div class="top-mover-card"><div class="top-mover-title losers">Top ' + moverTopN + ' Verlierer (' + metricLbl + ')</div>';
             if (losers.length === 0) {
                 html += '<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px;">Keine Verlierer</div>';
             } else {
                 losers.forEach(function(m) {
                     html += '<div class="top-mover-row">' +
                         '<div style="display:flex;align-items:center;overflow:hidden;flex:1;">' +
-                            '<span class="top-mover-asin">' + m.asin + '</span>' +
+                            '<a href="product.html?client=' + selectedClientId + '&asin=' + m.asin + '" class="asin-link">' + m.asin + '</a>' +
                             '<span class="top-mover-title-text">' + m.title + '</span>' +
                         '</div>' +
                         '<div class="top-mover-vals">' +
-                            '<span class="top-mover-abs">' + formatEuro(m.deltaEur) + '</span>' +
+                            '<span class="top-mover-abs">' + metricFmt(m.deltaAbs) + '</span>' +
                             '<span class="top-mover-pct negative">' + fmtPct.format(m.deltaPct) + ' %</span>' +
                         '</div></div>';
                 });
@@ -910,12 +1075,12 @@
             // Charts
             html += '<div class="top-mover-charts">' +
                 '<div class="top-mover-chart-card">' +
-                    '<div class="top-mover-chart-title"><span class="dot green"></span> Gewinner (Umsatzwachstum)</div>' +
-                    '<div class="chart-container" style="height:250px;"><canvas id="winnersChart"></canvas></div>' +
+                    '<div class="top-mover-chart-title"><span class="dot green"></span> Gewinner (' + metricLbl + ')</div>' +
+                    '<div class="chart-container" style="height:' + Math.max(250, winners.length * 28) + 'px;"><canvas id="winnersChart"></canvas></div>' +
                 '</div>' +
                 '<div class="top-mover-chart-card">' +
-                    '<div class="top-mover-chart-title"><span class="dot red"></span> Verlierer (Umsatzrückgang)</div>' +
-                    '<div class="chart-container" style="height:250px;"><canvas id="losersChart"></canvas></div>' +
+                    '<div class="top-mover-chart-title"><span class="dot red"></span> Verlierer (' + metricLbl + ')</div>' +
+                    '<div class="chart-container" style="height:' + Math.max(250, losers.length * 28) + 'px;"><canvas id="losersChart"></canvas></div>' +
                 '</div>' +
             '</div>';
 
@@ -925,43 +1090,69 @@
             renderTopMoverCharts(winners, losers);
         }
 
-        function renderTopMoverCharts(winners, losers) {
-            // If called without args, recalculate
-            if (!winners || !losers) {
-                var lastMonth = getLastMonth();
-                var prevMonth = lastMonth ? getPrevMonth(lastMonth) : null;
-                if (!lastMonth || !prevMonth) return;
-                var lastData = getDataForMonth(lastMonth);
-                var prevData = getDataForMonth(prevMonth);
-                var lastMap = {}; lastData.forEach(function(r) { if (r.asin) lastMap[r.asin] = r; });
-                var prevMap = {}; prevData.forEach(function(r) { if (r.asin) prevMap[r.asin] = r; });
-                var movers = [];
-                Object.keys(lastMap).forEach(function(asin) {
-                    if (!prevMap[asin]) return;
-                    var currRev = lastMap[asin].ordered_revenue || 0;
-                    var prevRev = prevMap[asin].ordered_revenue || 0;
-                    if (currRev < 100 && prevRev < 100) return;
-                    movers.push({ asin: asin, deltaEur: currRev - prevRev });
+        function changeMoverTopN(val) {
+            moverTopN = parseInt(val);
+            destroyAllCharts();
+            renderTopMovers();
+            initInfoIcons();
+        }
+
+        function changeMoverMetric(val) {
+            moverMetric = val;
+            destroyAllCharts();
+            renderTopMovers();
+            initInfoIcons();
+        }
+
+        function exportTopMovers() {
+            var lastMonth = getLastMonth();
+            var prevMonth = lastMonth ? getPrevMonth(lastMonth) : null;
+            if (!lastMonth || !prevMonth) return;
+            var lastData = getDataForMonth(lastMonth);
+            var prevData = getDataForMonth(prevMonth);
+            var lastMap = {}; lastData.forEach(function(r) { if (r.asin) lastMap[r.asin] = r; });
+            var prevMap = {}; prevData.forEach(function(r) { if (r.asin) prevMap[r.asin] = r; });
+            var metricKey = moverMetric;
+            var minThreshold = metricKey === 'ordered_revenue' ? 100 : 1;
+            var movers = [];
+            Object.keys(lastMap).forEach(function(asin) {
+                if (!prevMap[asin]) return;
+                var currVal = lastMap[asin][metricKey] || 0;
+                var prevVal = prevMap[asin][metricKey] || 0;
+                if (currVal < minThreshold && prevVal < minThreshold) return;
+                movers.push({
+                    asin: asin,
+                    title: lastMap[asin].title || '',
+                    currVal: currVal,
+                    prevVal: prevVal,
+                    deltaAbs: currVal - prevVal,
+                    deltaPct: prevVal ? ((currVal - prevVal) / prevVal) * 100 : 0
                 });
-                winners = movers.filter(function(m) { return m.deltaEur > 0; }).sort(function(a, b) { return b.deltaEur - a.deltaEur; }).slice(0, 10);
-                losers = movers.filter(function(m) { return m.deltaEur < 0; }).sort(function(a, b) { return a.deltaEur - b.deltaEur; }).slice(0, 10);
-            }
+            });
+            movers.sort(function(a, b) { return b.deltaAbs - a.deltaAbs; });
+            var headers = ['ASIN', 'Titel', 'Aktuell', 'Vormonat', 'Delta', 'Delta %'];
+            var rows = movers.map(function(m) { return [m.asin, m.title, m.currVal, m.prevVal, m.deltaAbs, Math.round(m.deltaPct * 10) / 10]; });
+            exportToExcel(rows, headers, 'Top Movers', 'Top-Movers');
+        }
+
+        function renderTopMoverCharts(winners, losers) {
+            if (!winners || !losers) return;
 
             var textColor = getThemeColor('--text-secondary');
             var gridColor = getThemeColor('--chart-grid');
             var successColor = getThemeColor('--success');
             var errorColor = getThemeColor('--error');
+            var metricFmt = getMetricFormatter(moverMetric);
 
-            // Winners chart
             var wCanvas = document.getElementById('winnersChart');
-            if (wCanvas) {
+            if (wCanvas && winners.length > 0) {
                 if (winnersChartInstance) winnersChartInstance.destroy();
                 winnersChartInstance = new Chart(wCanvas, {
                     type: 'bar',
                     data: {
                         labels: winners.map(function(m) { return m.asin; }),
                         datasets: [{
-                            data: winners.map(function(m) { return m.deltaEur; }),
+                            data: winners.map(function(m) { return m.deltaAbs; }),
                             backgroundColor: successColor || '#1a7f37',
                             borderRadius: 4
                         }]
@@ -972,26 +1163,25 @@
                         maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false },
-                            tooltip: { callbacks: { label: function(ctx) { return '+' + formatEuro(ctx.raw); } } }
+                            tooltip: { callbacks: { label: function(ctx) { return '+' + metricFmt(ctx.raw); } } }
                         },
                         scales: {
-                            x: { ticks: { color: textColor, font: { family: 'Arial', size: 10 }, callback: function(v) { return formatEuro(v); } }, grid: { color: gridColor } },
+                            x: { ticks: { color: textColor, font: { family: 'Arial', size: 10 }, callback: function(v) { return metricFmt(v); } }, grid: { color: gridColor } },
                             y: { ticks: { color: textColor, font: { family: 'monospace', size: 10 } }, grid: { display: false } }
                         }
                     }
                 });
             }
 
-            // Losers chart
             var lCanvas = document.getElementById('losersChart');
-            if (lCanvas) {
+            if (lCanvas && losers.length > 0) {
                 if (losersChartInstance) losersChartInstance.destroy();
                 losersChartInstance = new Chart(lCanvas, {
                     type: 'bar',
                     data: {
                         labels: losers.map(function(m) { return m.asin; }),
                         datasets: [{
-                            data: losers.map(function(m) { return m.deltaEur; }),
+                            data: losers.map(function(m) { return m.deltaAbs; }),
                             backgroundColor: errorColor || '#cf222e',
                             borderRadius: 4
                         }]
@@ -1002,10 +1192,10 @@
                         maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false },
-                            tooltip: { callbacks: { label: function(ctx) { return formatEuro(ctx.raw); } } }
+                            tooltip: { callbacks: { label: function(ctx) { return metricFmt(ctx.raw); } } }
                         },
                         scales: {
-                            x: { ticks: { color: textColor, font: { family: 'Arial', size: 10 }, callback: function(v) { return formatEuro(v); } }, grid: { color: gridColor } },
+                            x: { ticks: { color: textColor, font: { family: 'Arial', size: 10 }, callback: function(v) { return metricFmt(v); } }, grid: { color: gridColor } },
                             y: { ticks: { color: textColor, font: { family: 'monospace', size: 10 } }, grid: { display: false } }
                         }
                     }
@@ -1013,14 +1203,14 @@
             }
         }
 
-        /* ── C. Produkt-Ranking ── */
+        /* ── D. Produkt-Ranking ── */
         function renderRanking() {
             var el = document.getElementById('rankingSection');
+            if (!el) return;
             if (selectedMonths.length === 0) { el.innerHTML = ''; return; }
 
             var data = getSelectedData();
 
-            // Aggregate by ASIN across selected months
             var asinMap = {};
             data.forEach(function(r) {
                 if (!r.asin) return;
@@ -1031,22 +1221,19 @@
                 asinMap[r.asin].ordered_units += r.ordered_units || 0;
                 asinMap[r.asin].shipped_revenue += r.shipped_revenue || 0;
                 asinMap[r.asin].customer_returns += r.customer_returns || 0;
-                // Keep latest title/brand
                 if (r.title) asinMap[r.asin].title = r.title;
                 if (r.brand) asinMap[r.asin].brand = r.brand;
             });
 
             var rows = Object.values(asinMap);
 
-            // Filter
             if (rankSearch) {
                 var lower = rankSearch.toLowerCase();
                 rows = rows.filter(function(r) {
-                    return r.asin.toLowerCase().indexOf(lower) >= 0 || r.title.toLowerCase().indexOf(lower) >= 0;
+                    return r.asin.toLowerCase().indexOf(lower) >= 0 || r.title.toLowerCase().indexOf(lower) >= 0 || r.brand.toLowerCase().indexOf(lower) >= 0;
                 });
             }
 
-            // Sort
             rows.sort(function(a, b) {
                 var va = a[rankSortCol] || 0;
                 var vb = b[rankSortCol] || 0;
@@ -1059,6 +1246,7 @@
             });
 
             var totalRows = rows.length;
+            var allRowsForExport = rows.slice();
             var displayRows = rows.slice(0, rankDisplayCount);
 
             function sortIcon(col) {
@@ -1085,8 +1273,15 @@
                 '<div class="table-toolbar">' +
                     '<div class="table-toolbar-left">' +
                         '<span class="table-count">' + infoIcon('ranking', 'Produkt-Ranking', 'Alle ASINs aggregiert über die ausgewählten Monate. Klick auf Spaltenköpfe zum Sortieren.') + ' ' + totalRows + ' ASINs</span>' +
+                        '<select class="filter-select" onchange="rankSortChange(this.value)">' +
+                            '<option value="ordered_revenue"' + (rankSortCol === 'ordered_revenue' ? ' selected' : '') + '>Nach Umsatz</option>' +
+                            '<option value="ordered_units"' + (rankSortCol === 'ordered_units' ? ' selected' : '') + '>Nach Einheiten</option>' +
+                            '<option value="shipped_revenue"' + (rankSortCol === 'shipped_revenue' ? ' selected' : '') + '>Nach Vers.-Umsatz</option>' +
+                            '<option value="customer_returns"' + (rankSortCol === 'customer_returns' ? ' selected' : '') + '>Nach Rücksendungen</option>' +
+                        '</select>' +
+                        '<button class="btn-export" onclick="exportRanking()">&#8681; Export</button>' +
                     '</div>' +
-                    '<input class="search-input" type="text" placeholder="ASIN oder Titel suchen..." value="' + (rankSearch || '') + '" oninput="rankSearchChange(this.value)">' +
+                    '<input class="search-input" type="text" placeholder="ASIN, Titel oder Marke suchen..." value="' + (rankSearch || '') + '" oninput="rankSearchChange(this.value)">' +
                 '</div>' +
                 '<div class="table-wrap"><table><thead><tr>';
 
@@ -1103,7 +1298,7 @@
             displayRows.forEach(function(r, i) {
                 html += '<tr>' +
                     '<td>' + (i + 1) + '</td>' +
-                    '<td>' + r.asin + '</td>' +
+                    '<td><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
                     '<td title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
                     '<td>' + r.brand + '</td>' +
                     '<td>' + formatEuro(r.ordered_revenue) + '</td>' +
@@ -1121,6 +1316,17 @@
 
             html += '</div>';
             el.innerHTML = html;
+
+            // Store for export
+            window._rankExportRows = allRowsForExport;
+        }
+
+        function rankSortChange(val) {
+            rankSortCol = val;
+            rankSortDir = 'desc';
+            rankDisplayCount = 50;
+            renderRanking();
+            initInfoIcons();
         }
 
         function rankSort(col) {
@@ -1148,12 +1354,19 @@
             initInfoIcons();
         }
 
+        function exportRanking() {
+            var rows = (window._rankExportRows || []).map(function(r) {
+                return [r.asin, r.title, r.brand, r.ordered_revenue, r.ordered_units, r.shipped_revenue, r.customer_returns];
+            });
+            exportToExcel(rows, ['ASIN', 'Titel', 'Marke', 'Best.-Umsatz', 'Einheiten', 'Vers.-Umsatz', 'Rücksendungen'], 'Produkt-Ranking', 'Produkt-Ranking');
+        }
+
         /* ── E. Monatsvergleich ── */
         function renderCompareSection() {
             var el = document.getElementById('compareSection');
-            if (availableMonths.length < 2) { el.innerHTML = ''; return; }
+            if (!el) return;
+            if (availableMonths.length < 2) { el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Mindestens zwei Monate benötigt.</div></div>'; return; }
 
-            // Default: last two months
             if (!compareMonthA) compareMonthA = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 2] : availableMonths[0];
             if (!compareMonthB) compareMonthB = availableMonths[availableMonths.length - 1];
 
@@ -1176,7 +1389,6 @@
             var mapA = {}; dataA.forEach(function(r) { if (r.asin) mapA[r.asin] = r; });
             var mapB = {}; dataB.forEach(function(r) { if (r.asin) mapB[r.asin] = r; });
 
-            // All ASINs from both months
             var allAsins = {};
             Object.keys(mapA).forEach(function(a) { allAsins[a] = true; });
             Object.keys(mapB).forEach(function(a) { allAsins[a] = true; });
@@ -1201,7 +1413,6 @@
                 };
             });
 
-            // Sort
             rows.sort(function(a, b) {
                 if (compareSortCol === 'asin' || compareSortCol === 'title') {
                     var va = (a[compareSortCol] || '').toLowerCase();
@@ -1226,6 +1437,7 @@
             var html = '<div class="section-card">' +
                 '<div class="section-header">' +
                     '<h3>Monatsvergleich ' + infoIcon('compare', 'Monatsvergleich', 'Vergleiche zwei Monate direkt. Grüne Werte = Wachstum, rote Werte = Rückgang.') + '</h3>' +
+                    '<button class="btn-export" onclick="exportCompare()">&#8681; Export</button>' +
                 '</div>' +
                 '<div class="section-body">' +
                     '<div class="compare-controls">' +
@@ -1246,13 +1458,15 @@
                         '<th' + cmpThClass('delta_units') + ' onclick="compareSort(\'delta_units\')">&Delta; Einh. ' + cmpSortIcon('delta_units') + '</th>' +
                     '</tr></thead><tbody>';
 
+            window._compareExportRows = rows;
+
             rows.slice(0, 100).forEach(function(r) {
                 var revClass = r.delta_rev > 0 ? 'val-positive' : r.delta_rev < 0 ? 'val-negative' : '';
                 var pctClass = r.delta_rev_pct > 0 ? 'val-positive' : r.delta_rev_pct < 0 ? 'val-negative' : '';
                 var unitClass = r.delta_units > 0 ? 'val-positive' : r.delta_units < 0 ? 'val-negative' : '';
 
                 html += '<tr>' +
-                    '<td style="text-align:left;font-family:monospace;font-size:12px;">' + r.asin + '</td>' +
+                    '<td style="text-align:left;font-family:monospace;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
                     '<td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
                     '<td>' + formatEuro(r.revA) + '</td>' +
                     '<td>' + formatEuro(r.revB) + '</td>' +
@@ -1266,6 +1480,13 @@
 
             html += '</tbody></table></div></div></div>';
             el.innerHTML = html;
+        }
+
+        function exportCompare() {
+            var rows = (window._compareExportRows || []).map(function(r) {
+                return [r.asin, r.title, r.revA, r.revB, r.delta_rev, Math.round(r.delta_rev_pct * 10) / 10, r.unitsA, r.unitsB, r.delta_units];
+            });
+            exportToExcel(rows, ['ASIN', 'Titel', 'Umsatz A', 'Umsatz B', 'Delta EUR', 'Delta %', 'Einh. A', 'Einh. B', 'Delta Einh.'], 'Monatsvergleich', 'Monatsvergleich');
         }
 
         function changeCompareA(val) {
@@ -1287,6 +1508,473 @@
             }
             renderCompareSection();
             initInfoIcons();
+        }
+
+        /* ── F. Vorjahresvergleich (YoY) ── */
+        function renderYoYSection() {
+            var el = document.getElementById('yoySection');
+            if (!el) return;
+
+            var lastMonth = getLastMonth();
+            if (!lastMonth) {
+                el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Kein Monat ausgewählt.</div></div>';
+                return;
+            }
+
+            // Determine current month and year-ago month
+            if (!yoyMonth) yoyMonth = lastMonth;
+            var yoyYear = parseInt(yoyMonth.substring(0, 4));
+            var yoyMo = yoyMonth.substring(5, 7);
+            var prevYearMonth = (yoyYear - 1) + '-' + yoyMo;
+
+            var currData = getDataForMonth(yoyMonth);
+            var prevData = getDataForMonth(prevYearMonth);
+            var hasPrevYear = prevData.length > 0;
+
+            // Month selector
+            var monthOptions = availableMonths.map(function(m) {
+                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                var label = ps ? monthLabel(ps.period_start) : m;
+                return '<option value="' + m + '"' + (m === yoyMonth ? ' selected' : '') + '>' + label + '</option>';
+            }).join('');
+
+            var currLabel = monthLabel(currData.length > 0 ? currData[0].period_start : yoyMonth + '-01');
+            var prevLabel = (yoyYear - 1) + ' ' + currLabel.split(' ')[0];
+
+            var html = '<div class="section-card">' +
+                '<div class="section-header">' +
+                    '<h3>Vorjahresvergleich ' + infoIcon('yoy', 'Vorjahresvergleich', 'Vergleich des ausgewählten Monats mit dem gleichen Monat im Vorjahr.') + '</h3>' +
+                    '<div style="display:flex;align-items:center;gap:8px;">' +
+                        '<select class="filter-select" onchange="changeYoyMonth(this.value)">' + monthOptions + '</select>' +
+                        '<button class="btn-export" onclick="exportYoY()">&#8681; Export</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="section-body">';
+
+            if (!hasPrevYear) {
+                html += '<div style="padding:40px 20px;text-align:center;color:var(--text-secondary);font-size:14px;">Keine Vorjahresdaten vorhanden für ' + prevLabel + '.</div>';
+                html += '</div></div>';
+                el.innerHTML = html;
+                return;
+            }
+
+            // KPIs
+            var kpis = [
+                { key: 'ordered_revenue', label: 'Umsatz', fmt: formatEuro },
+                { key: 'ordered_units', label: 'Einheiten', fmt: formatInt },
+                { key: 'shipped_revenue', label: 'Versand', fmt: formatEuro },
+                { key: 'customer_returns', label: 'Rücksendungen', fmt: formatInt, inverse: true }
+            ];
+
+            html += '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);">';
+            kpis.forEach(function(kpi) {
+                var curr = currData.reduce(function(s, r) { return s + (r[kpi.key] || 0); }, 0);
+                var prev = prevData.reduce(function(s, r) { return s + (r[kpi.key] || 0); }, 0);
+                var diff = prev ? ((curr - prev) / prev) * 100 : 0;
+                var diffClass = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                if (kpi.inverse) diffClass = diff > 0 ? 'negative' : diff < 0 ? 'positive' : 'neutral';
+                var diffStr = prev ? (diff > 0 ? '&#9650; +' : diff < 0 ? '&#9660; ' : '') + fmtPct.format(Math.abs(diff)) + ' % vs. Vorjahr' : '—';
+
+                html += '<div class="kpi-card">' +
+                    '<div class="kpi-label">' + kpi.label + '</div>' +
+                    '<div class="kpi-value">' + kpi.fmt(curr) + '</div>' +
+                    '<div class="kpi-diff ' + diffClass + '">' + diffStr + '</div>' +
+                    '</div>';
+            });
+            html += '</div>';
+
+            // Table
+            var currMap = {}; currData.forEach(function(r) { if (r.asin) currMap[r.asin] = r; });
+            var prevMap = {}; prevData.forEach(function(r) { if (r.asin) prevMap[r.asin] = r; });
+            var allAsins = {};
+            Object.keys(currMap).forEach(function(a) { allAsins[a] = true; });
+            Object.keys(prevMap).forEach(function(a) { allAsins[a] = true; });
+
+            var rows = Object.keys(allAsins).map(function(asin) {
+                var c = currMap[asin] || {};
+                var p = prevMap[asin] || {};
+                var revCurr = c.ordered_revenue || 0;
+                var revPrev = p.ordered_revenue || 0;
+                return {
+                    asin: asin,
+                    title: c.title || p.title || '',
+                    revCurr: revCurr,
+                    revPrev: revPrev,
+                    delta_rev: revCurr - revPrev,
+                    delta_rev_pct: revPrev ? ((revCurr - revPrev) / revPrev) * 100 : (revCurr > 0 ? 100 : 0)
+                };
+            });
+
+            rows.sort(function(a, b) {
+                if (yoySortCol === 'asin' || yoySortCol === 'title') {
+                    var va = (a[yoySortCol] || '').toLowerCase();
+                    var vb = (b[yoySortCol] || '').toLowerCase();
+                    return yoySortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                }
+                return yoySortDir === 'asc' ? (a[yoySortCol] || 0) - (b[yoySortCol] || 0) : (b[yoySortCol] || 0) - (a[yoySortCol] || 0);
+            });
+
+            window._yoyExportRows = rows;
+
+            function yoySortIcon(col) {
+                var active = yoySortCol === col;
+                var arrow = active ? (yoySortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;';
+                return '<span class="sort-icon">' + arrow + '</span>';
+            }
+            function yoyThClass(col) {
+                return yoySortCol === col ? ' class="sorted"' : '';
+            }
+
+            html += '<div class="table-wrap" style="margin-top:16px;"><table><thead><tr>' +
+                '<th' + yoyThClass('asin') + ' onclick="yoySort(\'asin\')" style="text-align:left;">ASIN ' + yoySortIcon('asin') + '</th>' +
+                '<th' + yoyThClass('title') + ' onclick="yoySort(\'title\')" style="text-align:left;">Titel ' + yoySortIcon('title') + '</th>' +
+                '<th' + yoyThClass('revCurr') + ' onclick="yoySort(\'revCurr\')">Umsatz ' + currLabel + ' ' + yoySortIcon('revCurr') + '</th>' +
+                '<th' + yoyThClass('revPrev') + ' onclick="yoySort(\'revPrev\')">Umsatz ' + prevLabel + ' ' + yoySortIcon('revPrev') + '</th>' +
+                '<th' + yoyThClass('delta_rev') + ' onclick="yoySort(\'delta_rev\')">&Delta; EUR ' + yoySortIcon('delta_rev') + '</th>' +
+                '<th' + yoyThClass('delta_rev_pct') + ' onclick="yoySort(\'delta_rev_pct\')">&Delta; % ' + yoySortIcon('delta_rev_pct') + '</th>' +
+                '</tr></thead><tbody>';
+
+            rows.slice(0, 100).forEach(function(r) {
+                var revClass = r.delta_rev > 0 ? 'val-positive' : r.delta_rev < 0 ? 'val-negative' : '';
+                var pctClass = r.delta_rev_pct > 0 ? 'val-positive' : r.delta_rev_pct < 0 ? 'val-negative' : '';
+                html += '<tr>' +
+                    '<td style="text-align:left;font-family:monospace;font-size:12px;"><a href="product.html?client=' + selectedClientId + '&asin=' + r.asin + '" class="asin-link">' + r.asin + '</a></td>' +
+                    '<td style="text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + r.title.replace(/"/g, '&quot;') + '">' + r.title + '</td>' +
+                    '<td>' + formatEuro(r.revCurr) + '</td>' +
+                    '<td>' + formatEuro(r.revPrev) + '</td>' +
+                    '<td class="' + revClass + '">' + (r.delta_rev > 0 ? '+' : '') + formatEuro(r.delta_rev) + '</td>' +
+                    '<td class="' + pctClass + '">' + formatPct(r.delta_rev_pct) + '</td>' +
+                    '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            html += '</div></div>';
+            el.innerHTML = html;
+        }
+
+        function changeYoyMonth(val) {
+            yoyMonth = val;
+            renderYoYSection();
+            initInfoIcons();
+        }
+
+        function yoySort(col) {
+            if (yoySortCol === col) {
+                yoySortDir = yoySortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                yoySortCol = col;
+                yoySortDir = 'desc';
+            }
+            renderYoYSection();
+            initInfoIcons();
+        }
+
+        function exportYoY() {
+            var rows = (window._yoyExportRows || []).map(function(r) {
+                return [r.asin, r.title, r.revCurr, r.revPrev, r.delta_rev, Math.round(r.delta_rev_pct * 10) / 10];
+            });
+            exportToExcel(rows, ['ASIN', 'Titel', 'Umsatz aktuell', 'Umsatz Vorjahr', 'Delta EUR', 'Delta %'], 'Vorjahresvergleich', 'Vorjahresvergleich');
+        }
+
+        /* ── G. Brand-Analyse ── */
+        function renderBrandSection() {
+            var el = document.getElementById('brandSection');
+            if (!el) return;
+            if (selectedMonths.length === 0) {
+                el.innerHTML = '<div class="section-card"><div class="section-body" style="padding:40px 20px;text-align:center;color:var(--text-secondary);">Kein Monat ausgewählt.</div></div>';
+                return;
+            }
+
+            var data = getSelectedData();
+
+            // Aggregate by brand
+            var brandMap = {};
+            var totalRevenue = 0;
+            data.forEach(function(r) {
+                var brand = r.brand || 'Unbekannt';
+                if (!brandMap[brand]) {
+                    brandMap[brand] = { brand: brand, revenue: 0, units: 0, returns: 0 };
+                }
+                brandMap[brand].revenue += r.ordered_revenue || 0;
+                brandMap[brand].units += r.ordered_units || 0;
+                brandMap[brand].returns += r.customer_returns || 0;
+                totalRevenue += r.ordered_revenue || 0;
+            });
+
+            var brandRows = Object.values(brandMap);
+
+            // Previous month for delta
+            var lastMonth = getLastMonth();
+            var prevMonth = lastMonth ? getPrevMonth(lastMonth) : null;
+            var prevBrandMap = {};
+            if (prevMonth) {
+                var prevData = getDataForMonth(prevMonth);
+                prevData.forEach(function(r) {
+                    var brand = r.brand || 'Unbekannt';
+                    if (!prevBrandMap[brand]) prevBrandMap[brand] = { revenue: 0 };
+                    prevBrandMap[brand].revenue += r.ordered_revenue || 0;
+                });
+            }
+
+            brandRows.forEach(function(b) {
+                b.share = totalRevenue > 0 ? (b.revenue / totalRevenue) * 100 : 0;
+                var prev = prevBrandMap[b.brand];
+                b.deltaPct = prev && prev.revenue ? ((b.revenue - prev.revenue) / prev.revenue) * 100 : 0;
+            });
+
+            // Sort
+            brandRows.sort(function(a, b) {
+                if (brandSortCol === 'brand') {
+                    var va = a.brand.toLowerCase();
+                    var vb = b.brand.toLowerCase();
+                    return brandSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                }
+                return brandSortDir === 'asc' ? (a[brandSortCol] || 0) - (b[brandSortCol] || 0) : (b[brandSortCol] || 0) - (a[brandSortCol] || 0);
+            });
+
+            // Brand dropdown options
+            var allBrands = brandRows.map(function(b) { return b.brand; }).sort();
+
+            var html = '<div class="section-card">' +
+                '<div class="section-header">' +
+                    '<h3>Brand-Analyse ' + infoIcon('brand', 'Brand-Analyse', 'Gruppierung aller Produkte nach Marke. Zeigt Umsatzanteile und Trends.') + '</h3>' +
+                    '<div style="display:flex;align-items:center;gap:8px;">' +
+                        '<select class="filter-select" onchange="changeBrandFilter(this.value)">' +
+                            '<option value="">Alle Brands</option>';
+            allBrands.forEach(function(b) {
+                html += '<option value="' + b.replace(/"/g, '&quot;') + '"' + (selectedBrand === b ? ' selected' : '') + '>' + b + '</option>';
+            });
+            html += '</select>' +
+                        '<button class="btn-export" onclick="exportBrands()">&#8681; Export</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="section-body">';
+
+            // KPIs for selected brand or all
+            var kpiData = selectedBrand ? brandRows.filter(function(b) { return b.brand === selectedBrand; }) : brandRows;
+            var kpiRevenue = kpiData.reduce(function(s, b) { return s + b.revenue; }, 0);
+            var kpiUnits = kpiData.reduce(function(s, b) { return s + b.units; }, 0);
+            var kpiShare = totalRevenue > 0 ? (kpiRevenue / totalRevenue) * 100 : 0;
+
+            html += '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">' +
+                '<div class="kpi-card"><div class="kpi-label">Gesamtumsatz</div><div class="kpi-value">' + formatEuro(kpiRevenue) + '</div></div>' +
+                '<div class="kpi-card"><div class="kpi-label">Gesamte Einheiten</div><div class="kpi-value">' + formatInt(kpiUnits) + '</div></div>' +
+                '<div class="kpi-card"><div class="kpi-label">Anteil am Gesamtumsatz</div><div class="kpi-value">' + fmtPct.format(kpiShare) + ' %</div></div>' +
+                '</div>';
+
+            // Charts row
+            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">';
+
+            // Top 10 Brands bar chart
+            html += '<div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:16px;">' +
+                '<div style="font-size:13px;font-weight:600;margin-bottom:12px;">Top 10 Brands nach Umsatz</div>' +
+                '<div class="chart-container" style="height:300px;"><canvas id="brandBarChart"></canvas></div>' +
+                '</div>';
+
+            // Brand trend chart
+            html += '<div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:16px;">' +
+                '<div style="font-size:13px;font-weight:600;margin-bottom:12px;">Brand-Trend über Monate</div>' +
+                '<div class="chart-container" style="height:300px;"><canvas id="brandTrendChart"></canvas></div>' +
+                '</div>';
+
+            html += '</div>';
+
+            // If a brand is selected, show its products
+            if (selectedBrand) {
+                var brandProducts = [];
+                var asinMap = {};
+                data.forEach(function(r) {
+                    if ((r.brand || 'Unbekannt') !== selectedBrand) return;
+                    if (!r.asin) return;
+                    if (!asinMap[r.asin]) {
+                        asinMap[r.asin] = { asin: r.asin, title: r.title || '', revenue: 0, units: 0 };
+                    }
+                    asinMap[r.asin].revenue += r.ordered_revenue || 0;
+                    asinMap[r.asin].units += r.ordered_units || 0;
+                    if (r.title) asinMap[r.asin].title = r.title;
+                });
+                brandProducts = Object.values(asinMap).sort(function(a, b) { return b.revenue - a.revenue; });
+
+                html += '<div style="margin-bottom:16px;"><div style="font-size:13px;font-weight:600;margin-bottom:8px;">Produkte von ' + selectedBrand + '</div>';
+                html += '<div class="table-wrap"><table><thead><tr>' +
+                    '<th style="text-align:center;width:40px;">#</th>' +
+                    '<th style="text-align:left;">ASIN</th>' +
+                    '<th style="text-align:left;">Titel</th>' +
+                    '<th>Umsatz</th>' +
+                    '<th>Einheiten</th>' +
+                    '</tr></thead><tbody>';
+                brandProducts.forEach(function(p, i) {
+                    html += '<tr>' +
+                        '<td>' + (i + 1) + '</td>' +
+                        '<td style="text-align:left;"><a href="product.html?client=' + selectedClientId + '&asin=' + p.asin + '" class="asin-link">' + p.asin + '</a></td>' +
+                        '<td style="text-align:left;max-width:250px;overflow:hidden;text-overflow:ellipsis;" title="' + p.title.replace(/"/g, '&quot;') + '">' + p.title + '</td>' +
+                        '<td>' + formatEuro(p.revenue) + '</td>' +
+                        '<td>' + formatInt(p.units) + '</td>' +
+                        '</tr>';
+                });
+                html += '</tbody></table></div></div>';
+            }
+
+            // Brand table
+            function bSortIcon(col) {
+                var active = brandSortCol === col;
+                var arrow = active ? (brandSortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;';
+                return '<span class="sort-icon">' + arrow + '</span>';
+            }
+            function bThClass(col) {
+                return brandSortCol === col ? ' class="sorted"' : '';
+            }
+
+            html += '<div class="table-wrap"><table><thead><tr>' +
+                '<th' + bThClass('brand') + ' onclick="brandSort(\'brand\')" style="text-align:left;">Brand ' + bSortIcon('brand') + '</th>' +
+                '<th' + bThClass('revenue') + ' onclick="brandSort(\'revenue\')">Umsatz ' + bSortIcon('revenue') + '</th>' +
+                '<th' + bThClass('units') + ' onclick="brandSort(\'units\')">Einheiten ' + bSortIcon('units') + '</th>' +
+                '<th' + bThClass('share') + ' onclick="brandSort(\'share\')">Anteil % ' + bSortIcon('share') + '</th>' +
+                '<th' + bThClass('deltaPct') + ' onclick="brandSort(\'deltaPct\')">&Delta; % vs. Vormonat ' + bSortIcon('deltaPct') + '</th>' +
+                '</tr></thead><tbody>';
+
+            window._brandExportRows = brandRows;
+
+            brandRows.forEach(function(b) {
+                var deltaClass = b.deltaPct > 0 ? 'val-positive' : b.deltaPct < 0 ? 'val-negative' : '';
+                html += '<tr style="cursor:pointer;" onclick="changeBrandFilter(\'' + b.brand.replace(/'/g, "\\'") + '\')">' +
+                    '<td style="text-align:left;font-weight:500;">' + b.brand + '</td>' +
+                    '<td>' + formatEuro(b.revenue) + '</td>' +
+                    '<td>' + formatInt(b.units) + '</td>' +
+                    '<td>' + fmtPct.format(b.share) + ' %</td>' +
+                    '<td class="' + deltaClass + '">' + formatPct(b.deltaPct) + '</td>' +
+                    '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            html += '</div></div>';
+            el.innerHTML = html;
+
+            renderBrandCharts(brandRows);
+        }
+
+        function renderBrandCharts(brandRows) {
+            var textColor = getThemeColor('--text-secondary');
+            var gridColor = getThemeColor('--chart-grid');
+
+            // Top 10 bar chart
+            var top10 = brandRows.slice().sort(function(a, b) { return b.revenue - a.revenue; }).slice(0, 10);
+            var barCanvas = document.getElementById('brandBarChart');
+            if (barCanvas && top10.length > 0) {
+                if (brandBarChartInstance) brandBarChartInstance.destroy();
+                var colors = ['#3551FF','#e85d04','#1a7f37','#cf222e','#8250df','#0969da','#bf8700','#6e7681','#f85149','#3fb950'];
+                brandBarChartInstance = new Chart(barCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: top10.map(function(b) { return b.brand; }),
+                        datasets: [{
+                            data: top10.map(function(b) { return b.revenue; }),
+                            backgroundColor: colors.slice(0, top10.length),
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: function(ctx) { return formatEuro(ctx.raw); } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: textColor, font: { family: 'Arial', size: 10 }, callback: function(v) { return formatEuro(v); } }, grid: { color: gridColor } },
+                            y: { ticks: { color: textColor, font: { family: 'Arial', size: 10 } }, grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            // Trend chart: top 5 brands over months
+            var trendCanvas = document.getElementById('brandTrendChart');
+            if (trendCanvas && selectedMonths.length > 0) {
+                if (brandTrendChartInstance) brandTrendChartInstance.destroy();
+
+                var top5Brands = brandRows.slice().sort(function(a, b) { return b.revenue - a.revenue; }).slice(0, 5).map(function(b) { return b.brand; });
+                if (selectedBrand && top5Brands.indexOf(selectedBrand) < 0) {
+                    top5Brands = [selectedBrand].concat(top5Brands.slice(0, 4));
+                }
+
+                var trendLabels = [];
+                var trendDatasets = [];
+                var brandColors = ['#3551FF','#e85d04','#1a7f37','#cf222e','#8250df'];
+
+                selectedMonths.forEach(function(m) {
+                    var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                    trendLabels.push(ps ? monthLabel(ps.period_start) : m);
+                });
+
+                top5Brands.forEach(function(brand, idx) {
+                    var dset = {
+                        label: brand,
+                        data: [],
+                        borderColor: brandColors[idx % brandColors.length],
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.3,
+                        fill: false
+                    };
+                    selectedMonths.forEach(function(m) {
+                        var monthData = getDataForMonth(m);
+                        var sum = monthData.filter(function(r) { return (r.brand || 'Unbekannt') === brand; })
+                            .reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0);
+                        dset.data.push(sum);
+                    });
+                    trendDatasets.push(dset);
+                });
+
+                brandTrendChartInstance = new Chart(trendCanvas, {
+                    type: 'line',
+                    data: { labels: trendLabels, datasets: trendDatasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: textColor, font: { family: 'Arial', size: 11 } } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + formatEuro(ctx.raw); } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: textColor, font: { family: 'Arial', size: 10 } }, grid: { color: gridColor } },
+                            y: { ticks: { color: textColor, font: { family: 'Arial', size: 10 }, callback: function(v) { return formatEuro(v); } }, grid: { color: gridColor } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function changeBrandFilter(val) {
+            selectedBrand = val;
+            // Update the dropdown if it exists
+            var sel = document.querySelector('#brandSection .filter-select');
+            if (sel) sel.value = val;
+            destroyAllCharts();
+            renderBrandSection();
+            initInfoIcons();
+        }
+
+        function brandSort(col) {
+            if (brandSortCol === col) {
+                brandSortDir = brandSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                brandSortCol = col;
+                brandSortDir = 'desc';
+            }
+            destroyAllCharts();
+            renderBrandSection();
+            initInfoIcons();
+        }
+
+        function exportBrands() {
+            var rows = (window._brandExportRows || []).map(function(b) {
+                return [b.brand, b.revenue, b.units, Math.round(b.share * 10) / 10, Math.round(b.deltaPct * 10) / 10];
+            });
+            exportToExcel(rows, ['Brand', 'Umsatz', 'Einheiten', 'Anteil %', 'Delta % vs. Vormonat'], 'Brand-Analyse', 'Brand-Analyse');
         }
 
         // Start
