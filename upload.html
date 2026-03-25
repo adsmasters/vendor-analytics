@@ -504,25 +504,28 @@
                     var pEnd = toISODate(pf.meta.periodEnd);
                     progressFill.style.width = Math.round(((fi) / totalFiles) * 100) + '%';
 
-                    // Check for existing report
-                    var { data: existing } = await sb.from('vra_reports')
-                        .select('id')
-                        .eq('client_id', clientId)
-                        .eq('period_start', pStart)
-                        .eq('period_end', pEnd);
-
-                    var existingId = (existing && existing.length > 0) ? existing[0].id : null;
-                    if (existingId) {
-                        await sb.from('vra_data').delete().eq('report_id', existingId);
-                        await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingId);
-                    }
-
                     try {
+                        // Check for existing report
+                        var { data: existing, error: checkErr } = await sb.from('vra_reports')
+                            .select('id')
+                            .eq('client_id', clientId)
+                            .eq('period_start', pStart)
+                            .eq('period_end', pEnd);
+
+                        if (checkErr) throw new Error('Report-Check: ' + checkErr.message);
+
+                        var existingId = (existing && existing.length > 0) ? existing[0].id : null;
+                        if (existingId) {
+                            var { error: delErr } = await sb.from('vra_data').delete().eq('report_id', existingId);
+                            if (delErr) throw new Error('Löschen alter Daten: ' + delErr.message);
+                            await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingId);
+                        }
+
                         await doUploadSingle(clientId, pStart, pEnd, existingId, pf.data);
                         uploaded++;
                     } catch (e) {
                         errors++;
-                        errorDetails.push(pf.name + ': ' + e.message);
+                        errorDetails.push(pf.name + ': ' + (e.message || String(e)));
                     }
                     progressFill.style.width = Math.round(((fi + 1) / totalFiles) * 100) + '%';
                 }
