@@ -812,35 +812,114 @@
         }
 
         /* ── A. KPI Section ── */
+        // KPI period state
+        var kpiRangeFrom = null;
+        var kpiRangeTo = null;
+        var kpiCompareEnabled = false;
+        var kpiCompareFrom = null;
+        var kpiCompareTo = null;
+
         function renderKPIs() {
             var el = document.getElementById('kpiSection');
             if (!el) return;
-            var lastMonth = getLastMonth();
-            if (!lastMonth) { el.innerHTML = ''; return; }
+            if (availableMonths.length === 0) { el.innerHTML = ''; return; }
 
-            var lastData = getDataForMonth(lastMonth);
-            var prevMonth = getPrevMonth(lastMonth);
-            var prevData = prevMonth ? getDataForMonth(prevMonth) : [];
+            // Defaults
+            if (!kpiRangeFrom || availableMonths.indexOf(kpiRangeFrom) === -1) kpiRangeFrom = availableMonths[0];
+            if (!kpiRangeTo || availableMonths.indexOf(kpiRangeTo) === -1) kpiRangeTo = availableMonths[availableMonths.length - 1];
 
+            // Build month options
+            var monthOpts = availableMonths.map(function(m) {
+                var ps = allData.find(function(r) { return monthSortKey(r.period_start) === m; });
+                var lbl = ps ? monthLabel(ps.period_start) : m;
+                return { value: m, label: lbl };
+            });
+
+            function makeSelect(id, selected, onchange) {
+                return '<select class="filter-select" id="' + id + '" onchange="' + onchange + '">' +
+                    monthOpts.map(function(o) {
+                        return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
+                    }).join('') + '</select>';
+            }
+
+            // Aggregate data for range
+            function sumRange(fromMonth, toMonth) {
+                var result = { ordered_revenue: 0, ordered_units: 0, shipped_revenue: 0, shipped_units: 0, customer_returns: 0 };
+                availableMonths.forEach(function(m) {
+                    if (m >= fromMonth && m <= toMonth) {
+                        var data = getDataForMonth(m);
+                        data.forEach(function(r) {
+                            result.ordered_revenue += r.ordered_revenue || 0;
+                            result.ordered_units += r.ordered_units || 0;
+                            result.shipped_revenue += r.shipped_revenue || 0;
+                            result.shipped_units += r.shipped_units || 0;
+                            result.customer_returns += r.customer_returns || 0;
+                        });
+                    }
+                });
+                return result;
+            }
+
+            var curr = sumRange(kpiRangeFrom, kpiRangeTo);
+            var comp = null;
+            if (kpiCompareEnabled && kpiCompareFrom && kpiCompareTo) {
+                comp = sumRange(kpiCompareFrom, kpiCompareTo);
+            }
+
+            // Range label
+            var fromLabel = monthOpts.find(function(o) { return o.value === kpiRangeFrom; });
+            var toLabel = monthOpts.find(function(o) { return o.value === kpiRangeTo; });
+            var rangeStr = (fromLabel ? fromLabel.label : '') + ' – ' + (toLabel ? toLabel.label : '');
+
+            // Controls
+            var html = '<div class="section-card"><div class="section-body">' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;">' +
+                    '<span style="font-size:13px;font-weight:600;">Zeitraum:</span>' +
+                    makeSelect('kpiFrom', kpiRangeFrom, 'kpiChangeFrom(this.value)') +
+                    '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
+                    makeSelect('kpiTo', kpiRangeTo, 'kpiChangeTo(this.value)') +
+                    '<label style="display:flex;align-items:center;gap:4px;margin-left:16px;cursor:pointer;font-size:13px;">' +
+                        '<input type="checkbox" id="kpiCompareCheck" onchange="kpiToggleCompare(this.checked)"' + (kpiCompareEnabled ? ' checked' : '') + '>' +
+                        ' Vergleichen mit:' +
+                    '</label>';
+
+            if (kpiCompareEnabled) {
+                if (!kpiCompareFrom || availableMonths.indexOf(kpiCompareFrom) === -1) kpiCompareFrom = availableMonths[0];
+                if (!kpiCompareTo || availableMonths.indexOf(kpiCompareTo) === -1) kpiCompareTo = availableMonths[Math.min(availableMonths.length - 1, availableMonths.indexOf(kpiRangeFrom) - 1 >= 0 ? availableMonths.indexOf(kpiRangeFrom) - 1 : 0)];
+                html += makeSelect('kpiCompFrom', kpiCompareFrom, 'kpiChangeCompFrom(this.value)') +
+                    '<span style="font-size:12px;color:var(--text-secondary);">bis</span>' +
+                    makeSelect('kpiCompTo', kpiCompareTo, 'kpiChangeCompTo(this.value)');
+            }
+
+            html += '</div>';
+
+            // KPI Cards
             var kpis = [
-                { key: 'ordered_revenue', label: 'Bestellungsumsatz', fmt: 'eur', tip: 'Gesamtumsatz aus Bestellungen im letzten ausgewählten Monat.' },
-                { key: 'ordered_units', label: 'Bestellte Einheiten', fmt: 'int', tip: 'Anzahl bestellter Einheiten im letzten ausgewählten Monat.' },
+                { key: 'ordered_revenue', label: 'Bestellungsumsatz', fmt: 'eur', tip: 'Gesamtumsatz aus Bestellungen im gewählten Zeitraum.' },
+                { key: 'ordered_units', label: 'Bestellte Einheiten', fmt: 'int', tip: 'Anzahl bestellter Einheiten im gewählten Zeitraum.' },
                 { key: 'shipped_revenue', label: 'Versandumsatz', fmt: 'eur', tip: 'Umsatz aus versandten Bestellungen.' },
                 { key: 'shipped_units', label: 'Versandte Einheiten', fmt: 'int', tip: 'Anzahl versandter Einheiten.' },
                 { key: 'customer_returns', label: 'Kundenrücksendungen', fmt: 'int', tip: 'Anzahl der Kundenrücksendungen. Weniger ist besser.' }
             ];
 
-            var html = '<div class="kpi-grid">';
+            html += '<div class="kpi-grid">';
             kpis.forEach(function(kpi, i) {
-                var curr = lastData.reduce(function(s, r) { return s + (r[kpi.key] || 0); }, 0);
-                var prev = prevData.reduce(function(s, r) { return s + (r[kpi.key] || 0); }, 0);
-                var diff = prev ? ((curr - prev) / prev) * 100 : 0;
-                var diffClass = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
-                if (kpi.key === 'customer_returns') {
-                    diffClass = diff > 0 ? 'negative' : diff < 0 ? 'positive' : 'neutral';
+                var currVal = curr[kpi.key] || 0;
+                var formatted = kpi.fmt === 'eur' ? formatEuro(currVal) : formatInt(currVal);
+                var diffStr = '—';
+                var diffClass = 'neutral';
+
+                if (comp) {
+                    var compVal = comp[kpi.key] || 0;
+                    var diff = compVal ? ((currVal - compVal) / compVal) * 100 : 0;
+                    diffClass = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                    if (kpi.key === 'customer_returns') {
+                        diffClass = diff > 0 ? 'negative' : diff < 0 ? 'positive' : 'neutral';
+                    }
+                    diffStr = compVal ? (diff > 0 ? '&#9650; +' : diff < 0 ? '&#9660; ' : '') + fmtPct.format(Math.abs(diff)) + ' %' : '—';
+                    var compFormatted = kpi.fmt === 'eur' ? formatEuro(compVal) : formatInt(compVal);
+                    diffStr += '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Vergleich: ' + compFormatted + '</div>';
                 }
-                var diffStr = prev ? (diff > 0 ? '&#9650; +' : diff < 0 ? '&#9660; ' : '') + fmtPct.format(Math.abs(diff)) + ' %' : '—';
-                var formatted = kpi.fmt === 'eur' ? formatEuro(curr) : formatInt(curr);
 
                 html += '<div class="kpi-card">' +
                     '<div class="kpi-label">' + kpi.label + ' ' + infoIcon('kpi' + i, kpi.label, kpi.tip) + '</div>' +
@@ -848,9 +927,15 @@
                     '<div class="kpi-diff ' + diffClass + '">' + diffStr + '</div>' +
                     '</div>';
             });
-            html += '</div>';
+            html += '</div></div></div>';
             el.innerHTML = html;
         }
+
+        window.kpiChangeFrom = function(val) { kpiRangeFrom = val; renderKPIs(); initInfoIcons(); };
+        window.kpiChangeTo = function(val) { kpiRangeTo = val; renderKPIs(); initInfoIcons(); };
+        window.kpiToggleCompare = function(checked) { kpiCompareEnabled = checked; renderKPIs(); initInfoIcons(); };
+        window.kpiChangeCompFrom = function(val) { kpiCompareFrom = val; renderKPIs(); initInfoIcons(); };
+        window.kpiChangeCompTo = function(val) { kpiCompareTo = val; renderKPIs(); initInfoIcons(); };
 
         /* ── B. Trend Chart ── */
         function renderTrendSection() {
