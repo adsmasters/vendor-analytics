@@ -547,7 +547,7 @@
                         if (existingId) {
                             var { error: delErr } = await sb.from('vra_data').delete().eq('report_id', existingId);
                             if (delErr) throw new Error('Löschen alter Daten: ' + delErr.message);
-                            await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingId);
+                            await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString(), currency: pf.meta.currency || 'EUR' }).eq('id', existingId);
                         }
 
                         await doUploadSingle(clientId, pStart, pEnd, existingId, pf.data, pf.meta.currency);
