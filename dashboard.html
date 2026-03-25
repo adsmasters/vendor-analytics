@@ -866,10 +866,16 @@
                 comp = sumRange(kpiCompareFrom, kpiCompareTo);
             }
 
-            // Range label
+            // Range labels
             var fromLabel = monthOpts.find(function(o) { return o.value === kpiRangeFrom; });
             var toLabel = monthOpts.find(function(o) { return o.value === kpiRangeTo; });
-            var rangeStr = (fromLabel ? fromLabel.label : '') + ' – ' + (toLabel ? toLabel.label : '');
+            var rangeStr = kpiRangeFrom === kpiRangeTo ? (fromLabel ? fromLabel.label : '') : (fromLabel ? fromLabel.label : '') + ' – ' + (toLabel ? toLabel.label : '');
+            var compRangeStr = '';
+            if (kpiCompareEnabled && kpiCompareFrom && kpiCompareTo) {
+                var compFromLabel = monthOpts.find(function(o) { return o.value === kpiCompareFrom; });
+                var compToLabel = monthOpts.find(function(o) { return o.value === kpiCompareTo; });
+                compRangeStr = kpiCompareFrom === kpiCompareTo ? (compFromLabel ? compFromLabel.label : '') : (compFromLabel ? compFromLabel.label : '') + ' – ' + (compToLabel ? compToLabel.label : '');
+            }
 
             // Controls
             var html = '<div class="section-card"><div class="section-body">' +
@@ -916,13 +922,14 @@
                     if (kpi.key === 'customer_returns') {
                         diffClass = diff > 0 ? 'negative' : diff < 0 ? 'positive' : 'neutral';
                     }
-                    diffStr = compVal ? (diff > 0 ? '&#9650; +' : diff < 0 ? '&#9660; ' : '') + fmtPct.format(Math.abs(diff)) + ' %' : '—';
                     var compFormatted = kpi.fmt === 'eur' ? formatEuro(compVal) : formatInt(compVal);
-                    diffStr += '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Vergleich: ' + compFormatted + '</div>';
+                    diffStr = (compVal ? (diff > 0 ? '&#9650; +' : diff < 0 ? '&#9660; ' : '') + fmtPct.format(Math.abs(diff)) + ' %' : '—') +
+                        '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">' + compRangeStr + ': ' + compFormatted + '</div>';
                 }
 
                 html += '<div class="kpi-card">' +
                     '<div class="kpi-label">' + kpi.label + ' ' + infoIcon('kpi' + i, kpi.label, kpi.tip) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;">' + rangeStr + '</div>' +
                     '<div class="kpi-value">' + formatted + '</div>' +
                     '<div class="kpi-diff ' + diffClass + '">' + diffStr + '</div>' +
                     '</div>';
