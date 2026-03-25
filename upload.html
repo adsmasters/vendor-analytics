@@ -536,7 +536,40 @@
 
                 var msg = uploaded + ' Report' + (uploaded !== 1 ? 's' : '') + ' hochgeladen.';
                 if (errors > 0) msg += ' ' + errors + ' Fehler: ' + errorDetails.join(' | ');
-                showStatus(msg, errors > 0 ? 'error' : 'success');
+
+                // Check for month gaps
+                if (uploaded > 0) {
+                    var { data: allReports } = await sb.from('vra_reports')
+                        .select('period_start')
+                        .eq('client_id', clientId)
+                        .order('period_start', { ascending: true });
+
+                    if (allReports && allReports.length >= 2) {
+                        var months = allReports.map(function(r) {
+                            var d = new Date(r.period_start);
+                            return { year: d.getFullYear(), month: d.getMonth() };
+                        });
+                        var gaps = [];
+                        for (var gi = 1; gi < months.length; gi++) {
+                            var prev = months[gi - 1];
+                            var curr = months[gi];
+                            var expectedMonth = prev.month + 1;
+                            var expectedYear = prev.year;
+                            if (expectedMonth > 11) { expectedMonth = 0; expectedYear++; }
+                            while (expectedYear < curr.year || (expectedYear === curr.year && expectedMonth < curr.month)) {
+                                var monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+                                gaps.push(monthNames[expectedMonth] + ' ' + expectedYear);
+                                expectedMonth++;
+                                if (expectedMonth > 11) { expectedMonth = 0; expectedYear++; }
+                            }
+                        }
+                        if (gaps.length > 0) {
+                            msg += ' ⚠️ Fehlende Monate: ' + gaps.join(', ') + '.';
+                        }
+                    }
+                }
+
+                showStatus(msg, errors > 0 ? 'error' : (msg.indexOf('Fehlende') >= 0 ? 'warning' : 'success'));
                 setTimeout(function() { progressBar.style.display = 'none'; }, 2000);
             });
 
