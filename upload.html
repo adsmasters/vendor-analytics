@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Analytics — Upload</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f6f8fa; --bg-hover: #eef1f5;
+            --border: #d0d7de; --text-primary: #1f2328; --text-secondary: #656d76;
+            --accent: #3551FF; --accent-hover: #2a41cc;
+            --error: #cf222e; --success: #1a7f37; --success-bg: #dafbe1;
+            --badge-bg: #e8e8e8; --row-border: #e8eaed;
+            --modal-overlay: rgba(0,0,0,0.3);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-hover: #1c2129;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e;
+            --accent: #3551FF; --accent-hover: #2a44dd;
+            --error: #f85149; --success: #3fb950; --success-bg: #0d3320;
+            --badge-bg: #30363d; --row-border: #21262d;
+            --modal-overlay: rgba(0,0,0,0.6);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif; background: var(--bg-primary);
+            color: var(--text-primary); min-height: 100vh; transition: background 0.2s, color 0.2s;
+        }
+        .topbar {
+            background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+            padding: 0 32px; height: 56px; display: flex; align-items: center;
+            justify-content: space-between; position: sticky; top: 0; z-index: 100;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 32px; }
+        .topbar-logo { font-size: 18px; font-weight: 700; color: var(--accent); text-decoration: none; }
+        .topbar-nav { display: flex; gap: 24px; }
+        .topbar-nav a {
+            color: var(--text-secondary); text-decoration: none; font-size: 14px;
+            font-weight: 500; transition: color 0.2s;
+        }
+        .topbar-nav a:hover, .topbar-nav a.active { color: var(--text-primary); }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        .theme-toggle {
+            background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            width: 34px; height: 34px; border-radius: 6px; cursor: pointer; font-size: 15px;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .theme-toggle:hover { color: var(--text-primary); border-color: var(--text-primary); }
+        .btn-logout {
+            background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-logout:hover { color: var(--error); border-color: var(--error); }
+        .container { max-width: 800px; margin: 0 auto; padding: 32px 24px; }
+        .section-header { margin-bottom: 24px; }
+        .section-header h2 { font-size: 22px; font-weight: 700; }
+        .section-header p { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+        .form-group select, .form-group input[type="text"] {
+            width: 100%; padding: 10px 14px; background: var(--bg-secondary);
+            border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);
+            font-size: 14px; font-family: Arial, sans-serif; outline: none;
+        }
+        .form-group select:focus, .form-group input[type="text"]:focus { border-color: var(--accent); }
+        .dropzone {
+            border: 2px dashed var(--border); border-radius: 10px; padding: 48px 24px;
+            text-align: center; cursor: pointer; transition: all 0.2s;
+            background: var(--bg-secondary);
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent); background: var(--bg-hover);
+        }
+        .dropzone-icon { font-size: 36px; margin-bottom: 12px; }
+        .dropzone-text { font-size: 15px; color: var(--text-primary); margin-bottom: 4px; }
+        .dropzone-hint { font-size: 13px; color: var(--text-secondary); }
+        .file-info {
+            display: none; margin-top: 16px; padding: 16px; background: var(--bg-secondary);
+            border: 1px solid var(--border); border-radius: 8px;
+        }
+        .file-info .file-name { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+        .file-info .file-meta { font-size: 13px; color: var(--text-secondary); }
+        .file-info .file-meta span { margin-right: 16px; }
+        .btn-upload {
+            background: var(--accent); color: #fff; border: none; padding: 11px 28px;
+            border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s; margin-top: 20px; display: none;
+        }
+        .btn-upload:hover { background: var(--accent-hover); }
+        .btn-upload:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status-msg {
+            margin-top: 16px; padding: 12px 16px; border-radius: 6px; font-size: 14px; display: none;
+        }
+        .status-msg.success { display: block; background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+        .status-msg.error { display: block; background: #fdd; color: var(--error); border: 1px solid var(--error); }
+        .progress-bar {
+            width: 100%; height: 6px; background: var(--border); border-radius: 3px;
+            margin-top: 12px; display: none; overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%; background: var(--accent); border-radius: 3px;
+            transition: width 0.3s; width: 0%;
+        }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: var(--modal-overlay);
+            z-index: 200; align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 12px; padding: 28px 32px; width: 100%; max-width: 460px;
+        }
+        .modal h3 { font-size: 18px; margin-bottom: 12px; }
+        .modal p { font-size: 14px; color: var(--text-secondary); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+        .btn-cancel {
+            padding: 9px 20px; background: transparent; border: 1px solid var(--border);
+            color: var(--text-secondary); border-radius: 6px; font-size: 14px; cursor: pointer;
+        }
+        .btn-cancel:hover { color: var(--text-primary); border-color: var(--text-primary); }
+        .btn-primary {
+            background: var(--accent); color: #fff; border: none; padding: 9px 20px;
+            border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        @media (max-width: 700px) {
+            .topbar { padding: 0 16px; }
+            .container { padding: 20px 12px; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        var savedTheme = localStorage.getItem('vra_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+
+    <div class="topbar">
+        <div class="topbar-left">
+            <a href="dashboard.html" class="topbar-logo">Vendor Analytics</a>
+            <nav class="topbar-nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="clients.html">Kunden</a>
+                <a href="upload.html" class="active">Upload</a>
+                <a href="help.html">Hilfe</a>
+            </nav>
+        </div>
+        <div class="topbar-right">
+            <button class="theme-toggle" id="themeToggle" title="Theme wechseln"></button>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section-header">
+            <h2>Report hochladen</h2>
+            <p>Lade einen Amazon Vendor Retail Analytics Report (Excel) hoch.</p>
+        </div>
+
+        <div class="form-group">
+            <label>Kunde auswählen</label>
+            <select id="clientSelect">
+                <option value="">— Kunde wählen —</option>
+            </select>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+            <div class="dropzone-icon">\uD83D\uDCC4</div>
+            <div class="dropzone-text">Excel-Datei hierher ziehen oder klicken</div>
+            <div class="dropzone-hint">.xlsx oder .xls</div>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+
+        <div class="file-info" id="fileInfo">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-meta">
+                <span id="filePeriod"></span>
+                <span id="fileRows"></span>
+                <span id="fileCompany"></span>
+            </div>
+        </div>
+
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+
+        <button class="btn-upload" id="uploadBtn">Hochladen</button>
+        <div class="status-msg" id="statusMsg"></div>
+    </div>
+
+    <div class="modal-overlay" id="duplicateModal">
+        <div class="modal">
+            <h3>Duplikat erkannt</h3>
+            <p id="duplicateText">Für diesen Zeitraum existiert bereits ein Report. Möchtest du die vorhandenen Daten überschreiben?</p>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="dupCancel">Abbrechen</button>
+                <button class="btn-primary" id="dupOverwrite">Überschreiben</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            if (sessionStorage.getItem('vra_auth') !== '1') { window.location.href = 'index.html'; return; }
+
+            var SB_URL = 'https://lgrnmiszhhahfcmctmwo.supabase.co';
+            var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxncm5taXN6aGhhaGZjbWN0bXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NjE2NDksImV4cCI6MjA4OTIzNzY0OX0.FDZRGMESves7XbAMs_oMLWmvnywMlVqe8p7f1kt06qk';
+            var sb = supabase.createClient(SB_URL, SB_KEY);
+
+            var parsedData = null;
+            var parsedMeta = null;
+            var duplicateReportId = null;
+
+            function updateThemeIcon() {
+                var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.getElementById('themeToggle').textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+            }
+            updateThemeIcon();
+            document.getElementById('themeToggle').addEventListener('click', function() {
+                var c = document.documentElement.getAttribute('data-theme');
+                var n = c === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', n);
+                localStorage.setItem('vra_theme', n);
+                updateThemeIcon();
+            });
+
+            document.getElementById('logoutBtn').addEventListener('click', function() {
+                sessionStorage.removeItem('vra_auth');
+                window.location.href = 'index.html';
+            });
+
+            async function loadClients() {
+                var { data } = await sb.from('vra_clients').select('*').order('name');
+                var sel = document.getElementById('clientSelect');
+                (data || []).forEach(function(c) {
+                    var opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name + ' (' + c.marketplace + ')';
+                    sel.appendChild(opt);
+                });
+
+                var urlParams = new URLSearchParams(window.location.search);
+                var preselect = urlParams.get('client');
+                if (preselect) {
+                    sel.value = preselect;
+                }
+            }
+            loadClients();
+
+            var dropzone = document.getElementById('dropzone');
+            var fileInput = document.getElementById('fileInput');
+
+            dropzone.addEventListener('click', function() { fileInput.click(); });
+            dropzone.addEventListener('dragover', function(e) { e.preventDefault(); dropzone.classList.add('dragover'); });
+            dropzone.addEventListener('dragleave', function() { dropzone.classList.remove('dragover'); });
+            dropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+            });
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+            });
+
+            function parseDateDE(s) {
+                var parts = s.trim().split('.');
+                if (parts.length !== 3) return null;
+                var day = parseInt(parts[0], 10);
+                var month = parseInt(parts[1], 10) - 1;
+                var year = parseInt(parts[2], 10);
+                if (year < 100) year += 2000;
+                return new Date(year, month, day);
+            }
+
+            function parseNum(v) {
+                if (v == null || v === '') return 0;
+                if (typeof v === 'number') return v;
+                var s = String(v).replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
+                var n = parseFloat(s);
+                return isNaN(n) ? 0 : n;
+            }
+
+            function handleFile(file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var data = new Uint8Array(e.target.result);
+                    var wb = XLSX.read(data, { type: 'array' });
+                    var ws = wb.Sheets[wb.SheetNames[0]];
+                    var json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+                    if (json.length < 3) {
+                        showStatus('Datei enthält zu wenige Zeilen.', 'error');
+                        return;
+                    }
+
+                    var meta = {};
+                    var row0 = json[0];
+                    for (var i = 0; i < row0.length; i++) {
+                        var cell = String(row0[i]).trim();
+                        var match = cell.match(/^(.+?)=\[(.+?)\]$/);
+                        if (match) {
+                            meta[match[1].trim()] = match[2].trim();
+                        }
+                    }
+
+                    var periodStr = meta['Sichtweite'] || meta['Reporting Range'] || '';
+                    var periodParts = periodStr.split(' - ');
+                    var periodStart = null;
+                    var periodEnd = null;
+                    if (periodParts.length === 2) {
+                        periodStart = parseDateDE(periodParts[0]);
+                        periodEnd = parseDateDE(periodParts[1]);
+                    }
+
+                    if (!periodStart || !periodEnd) {
+                        showStatus('Zeitraum konnte nicht erkannt werden. Bitte prüfe die Datei.', 'error');
+                        return;
+                    }
+
+                    var headers = json[1];
+                    var headerMap = {};
+                    var headerNames = {
+                        'ASIN': 'asin', 'Produktbezeichnung': 'title', 'Marke': 'brand',
+                        'Bestellungsumsatz': 'ordered_revenue', 'Bestellte Einheiten': 'ordered_units',
+                        'Versandumsatz': 'shipped_revenue', 'Versendete COGS': 'shipped_cogs',
+                        'Versandte Einheiten': 'shipped_units', 'Kundenrücksendungen': 'customer_returns'
+                    };
+                    for (var h = 0; h < headers.length; h++) {
+                        var hName = String(headers[h]).trim();
+                        if (headerNames[hName]) {
+                            headerMap[headerNames[hName]] = h;
+                        }
+                    }
+
+                    var rows = [];
+                    for (var r = 2; r < json.length; r++) {
+                        var row = json[r];
+                        var asin = String(row[headerMap.asin] || '').trim();
+                        if (!asin || asin.length < 5) continue;
+                        rows.push({
+                            asin: asin,
+                            title: String(row[headerMap.title] || '').trim(),
+                            brand: String(row[headerMap.brand] || '').trim(),
+                            ordered_revenue: parseNum(row[headerMap.ordered_revenue]),
+                            ordered_units: parseNum(row[headerMap.ordered_units]),
+                            shipped_revenue: parseNum(row[headerMap.shipped_revenue]),
+                            shipped_cogs: parseNum(row[headerMap.shipped_cogs]),
+                            shipped_units: parseNum(row[headerMap.shipped_units]),
+                            customer_returns: parseNum(row[headerMap.customer_returns])
+                        });
+                    }
+
+                    parsedData = rows;
+                    parsedMeta = {
+                        periodStart: periodStart,
+                        periodEnd: periodEnd,
+                        company: meta['Unternehmen'] || meta['Distributor'] || ''
+                    };
+
+                    document.getElementById('fileInfo').style.display = 'block';
+                    document.getElementById('fileName').textContent = file.name;
+                    document.getElementById('filePeriod').textContent = 'Zeitraum: ' +
+                        periodStart.toLocaleDateString('de-DE') + ' – ' + periodEnd.toLocaleDateString('de-DE');
+                    document.getElementById('fileRows').textContent = rows.length + ' Produkte';
+                    document.getElementById('fileCompany').textContent = parsedMeta.company;
+                    document.getElementById('uploadBtn').style.display = 'inline-block';
+                    hideStatus();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function showStatus(msg, type) {
+                var el = document.getElementById('statusMsg');
+                el.textContent = msg;
+                el.className = 'status-msg ' + type;
+            }
+            function hideStatus() {
+                document.getElementById('statusMsg').className = 'status-msg';
+                document.getElementById('statusMsg').style.display = 'none';
+            }
+
+            function toISODate(d) {
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+
+            document.getElementById('uploadBtn').addEventListener('click', async function() {
+                var clientId = document.getElementById('clientSelect').value;
+                if (!clientId) {
+                    showStatus('Bitte einen Kunden auswählen.', 'error');
+                    return;
+                }
+                if (!parsedData || parsedData.length === 0) {
+                    showStatus('Keine Daten zum Hochladen.', 'error');
+                    return;
+                }
+
+                var pStart = toISODate(parsedMeta.periodStart);
+                var pEnd = toISODate(parsedMeta.periodEnd);
+
+                var { data: existing } = await sb.from('vra_reports')
+                    .select('id')
+                    .eq('client_id', clientId)
+                    .eq('period_start', pStart)
+                    .eq('period_end', pEnd);
+
+                if (existing && existing.length > 0) {
+                    duplicateReportId = existing[0].id;
+                    document.getElementById('duplicateModal').classList.add('open');
+                    return;
+                }
+
+                await doUpload(clientId, pStart, pEnd, null);
+            });
+
+            document.getElementById('dupCancel').addEventListener('click', function() {
+                document.getElementById('duplicateModal').classList.remove('open');
+                duplicateReportId = null;
+            });
+
+            document.getElementById('dupOverwrite').addEventListener('click', async function() {
+                document.getElementById('duplicateModal').classList.remove('open');
+                var clientId = document.getElementById('clientSelect').value;
+                var pStart = toISODate(parsedMeta.periodStart);
+                var pEnd = toISODate(parsedMeta.periodEnd);
+                await doUpload(clientId, pStart, pEnd, duplicateReportId);
+                duplicateReportId = null;
+            });
+
+            async function doUpload(clientId, pStart, pEnd, existingReportId) {
+                var btn = document.getElementById('uploadBtn');
+                btn.disabled = true;
+                btn.textContent = 'Wird hochgeladen...';
+
+                var progressBar = document.getElementById('progressBar');
+                var progressFill = document.getElementById('progressFill');
+                progressBar.style.display = 'block';
+                progressFill.style.width = '10%';
+
+                var reportId = existingReportId;
+
+                if (existingReportId) {
+                    await sb.from('vra_data').delete().eq('report_id', existingReportId);
+                    await sb.from('vra_reports').update({ uploaded_at: new Date().toISOString() }).eq('id', existingReportId);
+                    progressFill.style.width = '20%';
+                } else {
+                    var { data: rep, error: repErr } = await sb.from('vra_reports').insert({
+                        client_id: clientId,
+                        period_start: pStart,
+                        period_end: pEnd
+                    }).select('id').single();
+
+                    if (repErr) {
+                        showStatus('Fehler beim Erstellen des Reports: ' + repErr.message, 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Hochladen';
+                        progressBar.style.display = 'none';
+                        return;
+                    }
+                    reportId = rep.id;
+                    progressFill.style.width = '20%';
+                }
+
+                var batchSize = 100;
+                var total = parsedData.length;
+                var inserted = 0;
+
+                for (var i = 0; i < total; i += batchSize) {
+                    var batch = parsedData.slice(i, i + batchSize).map(function(row) {
+                        return {
+                            report_id: reportId,
+                            client_id: clientId,
+                            asin: row.asin,
+                            title: row.title,
+                            brand: row.brand,
+                            ordered_revenue: row.ordered_revenue,
+                            ordered_units: row.ordered_units,
+                            shipped_revenue: row.shipped_revenue,
+                            shipped_cogs: row.shipped_cogs,
+                            shipped_units: row.shipped_units,
+                            customer_returns: row.customer_returns,
+                            period_start: pStart,
+                            period_end: pEnd
+                        };
+                    });
+
+                    var { error: insertErr } = await sb.from('vra_data').insert(batch);
+                    if (insertErr) {
+                        showStatus('Fehler beim Speichern (Zeile ' + (i + 1) + '): ' + insertErr.message, 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Hochladen';
+                        progressBar.style.display = 'none';
+                        return;
+                    }
+                    inserted += batch.length;
+                    var pct = 20 + Math.round((inserted / total) * 80);
+                    progressFill.style.width = pct + '%';
+                }
+
+                progressFill.style.width = '100%';
+                showStatus(inserted + ' Produkte erfolgreich hochgeladen.', 'success');
+                btn.disabled = false;
+                btn.textContent = 'Hochladen';
+
+                parsedData = null;
+                parsedMeta = null;
+                document.getElementById('fileInfo').style.display = 'none';
+                btn.style.display = 'none';
+                fileInput.value = '';
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Analytics — Hilfe</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f6f8fa; --bg-hover: #eef1f5;
+            --border: #d0d7de; --text-primary: #1f2328; --text-secondary: #656d76;
+            --accent: #3551FF; --accent-hover: #2a41cc;
+            --error: #cf222e; --success: #1a7f37; --success-bg: #dafbe1;
+            --badge-bg: #e8e8e8; --row-border: #e8eaed;
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-hover: #1c2129;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e;
+            --accent: #3551FF; --accent-hover: #2a44dd;
+            --error: #f85149; --success: #3fb950; --success-bg: #0d3320;
+            --badge-bg: #30363d; --row-border: #21262d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif; background: var(--bg-primary);
+            color: var(--text-primary); min-height: 100vh; transition: background 0.2s, color 0.2s;
+        }
+        .topbar {
+            background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+            padding: 0 32px; height: 56px; display: flex; align-items: center;
+            justify-content: space-between; position: sticky; top: 0; z-index: 100;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 32px; }
+        .topbar-logo { font-size: 18px; font-weight: 700; color: var(--accent); text-decoration: none; }
+        .topbar-nav { display: flex; gap: 24px; }
+        .topbar-nav a {
+            color: var(--text-secondary); text-decoration: none; font-size: 14px;
+            font-weight: 500; transition: color 0.2s;
+        }
+        .topbar-nav a:hover, .topbar-nav a.active { color: var(--text-primary); }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        .theme-toggle {
+            background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            width: 34px; height: 34px; border-radius: 6px; cursor: pointer; font-size: 15px;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .theme-toggle:hover { color: var(--text-primary); border-color: var(--text-primary); }
+        .btn-logout {
+            background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-logout:hover { color: var(--error); border-color: var(--error); }
+        .container { max-width: 800px; margin: 0 auto; padding: 32px 24px; }
+        h2 { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
+        .help-card {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 10px; padding: 24px 28px; margin-bottom: 20px;
+        }
+        .help-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 12px; color: var(--accent); }
+        .help-card p, .help-card li { font-size: 14px; line-height: 1.7; color: var(--text-secondary); }
+        .help-card ol, .help-card ul { padding-left: 20px; margin-top: 8px; }
+        .help-card li { margin-bottom: 6px; }
+        .help-card strong { color: var(--text-primary); }
+        .faq-item { margin-bottom: 16px; }
+        .faq-q {
+            font-size: 14px; font-weight: 700; color: var(--text-primary);
+            cursor: pointer; padding: 10px 0; display: flex; justify-content: space-between; align-items: center;
+        }
+        .faq-q:hover { color: var(--accent); }
+        .faq-a {
+            font-size: 14px; color: var(--text-secondary); line-height: 1.7;
+            padding: 0 0 10px 0; display: none;
+        }
+        .faq-a.open { display: block; }
+        .faq-toggle { font-size: 18px; transition: transform 0.2s; }
+        .faq-toggle.open { transform: rotate(45deg); }
+        .divider { border-bottom: 1px solid var(--border); margin: 0; }
+        @media (max-width: 700px) {
+            .topbar { padding: 0 16px; }
+            .container { padding: 20px 12px; }
+            .help-card { padding: 18px 16px; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        var savedTheme = localStorage.getItem('vra_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+
+    <div class="topbar">
+        <div class="topbar-left">
+            <a href="dashboard.html" class="topbar-logo">Vendor Analytics</a>
+            <nav class="topbar-nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="clients.html">Kunden</a>
+                <a href="upload.html">Upload</a>
+                <a href="help.html" class="active">Hilfe</a>
+            </nav>
+        </div>
+        <div class="topbar-right">
+            <button class="theme-toggle" id="themeToggle" title="Theme wechseln"></button>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Hilfe</h2>
+
+        <div class="help-card">
+            <h3>Was ist Vendor Analytics?</h3>
+            <p>
+                Vendor Analytics ist ein Tool zur Analyse deiner Amazon Vendor Retail Analytics Reports.
+                Lade deine monatlichen Reports hoch und erhalte sofort Einblicke in Umsatzentwicklung,
+                Produktperformance und Trends.
+            </p>
+        </div>
+
+        <div class="help-card">
+            <h3>So funktioniert's</h3>
+            <ol>
+                <li><strong>Kunde anlegen:</strong> Gehe zu <a href="clients.html">Kunden</a> und erstelle einen neuen Kunden mit Name und Marketplace.</li>
+                <li><strong>Report herunterladen:</strong> Lade den "Retail Analytics" Report aus deinem Amazon Vendor Central als Excel-Datei (.xlsx) herunter.</li>
+                <li><strong>Report hochladen:</strong> Gehe zu <a href="upload.html">Upload</a>, wähle den Kunden aus und lade die Excel-Datei hoch. Der Zeitraum wird automatisch aus den Metadaten erkannt.</li>
+                <li><strong>Analysieren:</strong> Im <a href="dashboard.html">Dashboard</a> siehst du KPIs, Trends, Produkt-Rankings und Monatsvergleiche.</li>
+            </ol>
+        </div>
+
+        <div class="help-card">
+            <h3>Report-Format</h3>
+            <p>Der Report muss das Standard-Format von Amazon Vendor Central Retail Analytics haben:</p>
+            <ul>
+                <li><strong>Zeile 1 (Metadaten):</strong> Enthält Programm, Unternehmen, Sichtweite (Zeitraum) und Land im Format <code>Key=[Value]</code></li>
+                <li><strong>Zeile 2 (Header):</strong> ASIN, Produktbezeichnung, Marke, Bestellungsumsatz, Bestellte Einheiten, Versandumsatz, Versendete COGS, Versandte Einheiten, Kundenrücksendungen</li>
+                <li><strong>Ab Zeile 3:</strong> Produktdaten</li>
+            </ul>
+        </div>
+
+        <div class="help-card">
+            <h3>Häufige Fragen</h3>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Was passiert bei einem Duplikat-Upload?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Wenn für den gleichen Kunden und Zeitraum bereits ein Report existiert, wirst du gefragt
+                    ob du die vorhandenen Daten überschreiben möchtest. Die alten Daten werden dann durch die
+                    neuen ersetzt.
+                </div>
+            </div>
+            <div class="divider"></div>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Welche Metriken werden analysiert?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Bestellungsumsatz, Bestellte Einheiten, Versandumsatz, Versendete COGS,
+                    Versandte Einheiten und Kundenrücksendungen. Alle Werte werden pro ASIN
+                    und aggregiert auf Kundenebene angezeigt.
+                </div>
+            </div>
+            <div class="divider"></div>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Was sind "Top Movers"?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Top Movers vergleichen den aktuellsten Monat mit dem Vormonat. Produkte mit dem
+                    größten prozentualen Umsatzwachstum sind "Gewinner", solche mit dem größten
+                    Rückgang "Verlierer". Es werden nur ASINs berücksichtigt, die in beiden Monaten vorhanden sind.
+                </div>
+            </div>
+            <div class="divider"></div>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Kann ich mehrere Monate gleichzeitig analysieren?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Ja. Im Dashboard kannst du im Zeitraum-Filter mehrere Monate auswählen (Strg/Cmd + Klick).
+                    Die KPIs und das Produkt-Ranking werden dann über den gesamten Zeitraum aggregiert.
+                </div>
+            </div>
+            <div class="divider"></div>
+
+            <div class="faq-item">
+                <div class="faq-q" onclick="toggleFaq(this)">
+                    <span>Wie lösche ich einen Report?</span>
+                    <span class="faq-toggle">+</span>
+                </div>
+                <div class="faq-a">
+                    Aktuell können Reports nur durch das Löschen des gesamten Kunden entfernt werden.
+                    Alternativ kannst du den Report erneut hochladen und die Daten überschreiben.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            if (sessionStorage.getItem('vra_auth') !== '1') { window.location.href = 'index.html'; return; }
+
+            function updateThemeIcon() {
+                var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.getElementById('themeToggle').textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+            }
+            updateThemeIcon();
+            document.getElementById('themeToggle').addEventListener('click', function() {
+                var c = document.documentElement.getAttribute('data-theme');
+                var n = c === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', n);
+                localStorage.setItem('vra_theme', n);
+                updateThemeIcon();
+            });
+            document.getElementById('logoutBtn').addEventListener('click', function() {
+                sessionStorage.removeItem('vra_auth');
+                window.location.href = 'index.html';
+            });
+        })();
+
+        function toggleFaq(el) {
+            var answer = el.nextElementSibling;
+            var toggle = el.querySelector('.faq-toggle');
+            var isOpen = answer.classList.contains('open');
+            answer.classList.toggle('open');
+            toggle.classList.toggle('open');
+            toggle.textContent = isOpen ? '+' : '\u00D7';
+        }
+    </script>
+</body>
+</html>

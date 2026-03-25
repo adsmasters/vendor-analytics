@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Analytics — Kunden</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <style>
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f6f8fa; --bg-hover: #eef1f5;
+            --border: #d0d7de; --text-primary: #1f2328; --text-secondary: #656d76;
+            --accent: #3551FF; --accent-hover: #2a41cc;
+            --error: #cf222e; --success: #1a7f37; --success-bg: #dafbe1;
+            --badge-bg: #e8e8e8; --row-border: #e8eaed;
+            --modal-overlay: rgba(0,0,0,0.3);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-hover: #1c2129;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e;
+            --accent: #3551FF; --accent-hover: #2a44dd;
+            --error: #f85149; --success: #3fb950; --success-bg: #0d3320;
+            --badge-bg: #30363d; --row-border: #21262d;
+            --modal-overlay: rgba(0,0,0,0.6);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background 0.2s, color 0.2s;
+        }
+        .topbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 32px; }
+        .topbar-logo { font-size: 18px; font-weight: 700; color: var(--accent); text-decoration: none; }
+        .topbar-nav { display: flex; gap: 24px; }
+        .topbar-nav a {
+            color: var(--text-secondary); text-decoration: none; font-size: 14px;
+            font-weight: 500; transition: color 0.2s;
+        }
+        .topbar-nav a:hover, .topbar-nav a.active { color: var(--text-primary); }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        .theme-toggle {
+            background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            width: 34px; height: 34px; border-radius: 6px; cursor: pointer; font-size: 15px;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .theme-toggle:hover { color: var(--text-primary); border-color: var(--text-primary); }
+        .btn-logout {
+            background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+            padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-logout:hover { color: var(--error); border-color: var(--error); }
+        .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+        .section-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+        }
+        .section-header h2 { font-size: 22px; font-weight: 700; }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .badge-count {
+            background: var(--badge-bg); color: var(--text-secondary); font-size: 13px;
+            padding: 2px 10px; border-radius: 12px; font-weight: 600;
+        }
+        .btn-primary {
+            background: var(--accent); color: #fff; border: none; padding: 9px 20px;
+            border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-sm {
+            padding: 5px 12px; font-size: 12px; border-radius: 5px; border: 1px solid var(--border);
+            background: transparent; color: var(--text-secondary); cursor: pointer; transition: all 0.2s;
+        }
+        .btn-sm:hover { color: var(--text-primary); border-color: var(--text-primary); }
+        .btn-sm.danger:hover { color: var(--error); border-color: var(--error); }
+        .table-card {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 10px; overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600;
+            color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border); background: var(--bg-secondary);
+        }
+        tbody td {
+            padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--row-border);
+            vertical-align: middle;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: var(--bg-hover); }
+        .client-link { color: var(--accent); cursor: pointer; font-weight: 600; text-decoration: none; }
+        .client-link:hover { text-decoration: underline; }
+        .text-muted { color: var(--text-secondary); font-size: 13px; }
+        .empty-state { text-align: center; padding: 48px 16px; color: var(--text-secondary); font-size: 14px; }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: var(--modal-overlay);
+            z-index: 200; align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 12px; padding: 28px 32px; width: 100%; max-width: 460px;
+        }
+        .modal h3 { font-size: 18px; margin-bottom: 20px; }
+        .modal label {
+            display: block; font-size: 13px; color: var(--text-secondary);
+            margin-bottom: 6px; margin-top: 14px;
+        }
+        .modal label:first-of-type { margin-top: 0; }
+        .modal input, .modal select {
+            width: 100%; padding: 9px 12px; background: var(--bg-primary);
+            border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);
+            font-size: 14px; font-family: Arial, sans-serif; outline: none;
+        }
+        .modal input:focus, .modal select:focus { border-color: var(--accent); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+        .btn-cancel {
+            padding: 9px 20px; background: transparent; border: 1px solid var(--border);
+            color: var(--text-secondary); border-radius: 6px; font-size: 14px; cursor: pointer;
+        }
+        .btn-cancel:hover { color: var(--text-primary); border-color: var(--text-primary); }
+        .modal-error { color: var(--error); font-size: 13px; margin-top: 10px; display: none; }
+        @media (max-width: 700px) {
+            .topbar { padding: 0 16px; }
+            .topbar-nav { gap: 14px; }
+            .container { padding: 20px 12px; }
+            thead th, tbody td { padding: 10px 10px; font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        var savedTheme = localStorage.getItem('vra_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+
+    <div class="topbar">
+        <div class="topbar-left">
+            <a href="dashboard.html" class="topbar-logo">Vendor Analytics</a>
+            <nav class="topbar-nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="clients.html" class="active">Kunden</a>
+                <a href="upload.html">Upload</a>
+                <a href="help.html">Hilfe</a>
+            </nav>
+        </div>
+        <div class="topbar-right">
+            <button class="theme-toggle" id="themeToggle" title="Theme wechseln"></button>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section-header">
+            <div class="header-left">
+                <h2>Kunden</h2>
+                <span class="badge-count" id="clientCount">0</span>
+            </div>
+            <button class="btn-primary" id="addClientBtn">+ Kunde anlegen</button>
+        </div>
+        <div class="table-card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Marketplace</th>
+                        <th>Reports</th>
+                        <th>Erstellt</th>
+                        <th style="width:140px">Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody id="clientsBody">
+                    <tr><td colspan="5" class="empty-state">Lade Kunden...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="clientModal">
+        <div class="modal">
+            <h3 id="modalTitle">Kunde anlegen</h3>
+            <input type="hidden" id="editClientId">
+            <label>Name</label>
+            <input type="text" id="clientName" placeholder="z.B. Red Bull Germany">
+            <label>Marketplace</label>
+            <select id="clientMarketplace">
+                <option value="DE">DE — Deutschland</option>
+                <option value="AT">AT — Österreich</option>
+                <option value="FR">FR — Frankreich</option>
+                <option value="IT">IT — Italien</option>
+                <option value="ES">ES — Spanien</option>
+                <option value="NL">NL — Niederlande</option>
+                <option value="UK">UK — Vereinigtes Königreich</option>
+                <option value="US">US — USA</option>
+            </select>
+            <div class="modal-error" id="modalError"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="modalCancel">Abbrechen</button>
+                <button class="btn-primary" id="modalSave">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal">
+            <h3>Kunde löschen</h3>
+            <p style="font-size:14px;color:var(--text-secondary);margin-bottom:4px;">
+                Möchtest du <strong id="deleteClientName"></strong> wirklich löschen?
+            </p>
+            <p style="font-size:13px;color:var(--error);">Alle zugehörigen Reports und Daten werden ebenfalls gelöscht.</p>
+            <input type="hidden" id="deleteClientId">
+            <div class="modal-actions">
+                <button class="btn-cancel" id="deleteCancel">Abbrechen</button>
+                <button class="btn-primary" id="deleteConfirm" style="background:var(--error);">Löschen</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            if (sessionStorage.getItem('vra_auth') !== '1') { window.location.href = 'index.html'; return; }
+
+            var SB_URL = 'https://lgrnmiszhhahfcmctmwo.supabase.co';
+            var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxncm5taXN6aGhhaGZjbWN0bXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NjE2NDksImV4cCI6MjA4OTIzNzY0OX0.FDZRGMESves7XbAMs_oMLWmvnywMlVqe8p7f1kt06qk';
+            var sb = supabase.createClient(SB_URL, SB_KEY);
+
+            function updateThemeIcon() {
+                var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.getElementById('themeToggle').textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+            }
+            updateThemeIcon();
+            document.getElementById('themeToggle').addEventListener('click', function() {
+                var c = document.documentElement.getAttribute('data-theme');
+                var n = c === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', n);
+                localStorage.setItem('vra_theme', n);
+                updateThemeIcon();
+            });
+
+            document.getElementById('logoutBtn').addEventListener('click', function() {
+                sessionStorage.removeItem('vra_auth');
+                window.location.href = 'index.html';
+            });
+
+            var clients = [];
+
+            function formatDate(d) {
+                var dt = new Date(d);
+                return dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            }
+
+            async function loadClients() {
+                var { data: clientList, error } = await sb.from('vra_clients').select('*').order('name');
+                if (error) { return; }
+
+                var { data: reports } = await sb.from('vra_reports').select('id, client_id');
+                var countMap = {};
+                if (reports) {
+                    reports.forEach(function(r) {
+                        countMap[r.client_id] = (countMap[r.client_id] || 0) + 1;
+                    });
+                }
+
+                clients = clientList || [];
+                document.getElementById('clientCount').textContent = clients.length;
+
+                var tbody = document.getElementById('clientsBody');
+                if (clients.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Noch keine Kunden angelegt.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = clients.map(function(c) {
+                    var rc = countMap[c.id] || 0;
+                    return '<tr>' +
+                        '<td><a class="client-link" href="dashboard.html?client=' + c.id + '">' + esc(c.name) + '</a></td>' +
+                        '<td>' + esc(c.marketplace) + '</td>' +
+                        '<td>' + rc + '</td>' +
+                        '<td class="text-muted">' + formatDate(c.created_at) + '</td>' +
+                        '<td>' +
+                            '<button class="btn-sm" onclick="editClient(\'' + c.id + '\')">Bearbeiten</button> ' +
+                            '<button class="btn-sm danger" onclick="deleteClient(\'' + c.id + '\',\'' + esc(c.name) + '\')">Löschen</button>' +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+
+            function esc(s) {
+                var d = document.createElement('div');
+                d.textContent = s || '';
+                return d.innerHTML;
+            }
+
+            window.editClient = function(id) {
+                var c = clients.find(function(x) { return x.id === id; });
+                if (!c) return;
+                document.getElementById('modalTitle').textContent = 'Kunde bearbeiten';
+                document.getElementById('editClientId').value = c.id;
+                document.getElementById('clientName').value = c.name;
+                document.getElementById('clientMarketplace').value = c.marketplace;
+                document.getElementById('modalError').style.display = 'none';
+                document.getElementById('clientModal').classList.add('open');
+            };
+
+            window.deleteClient = function(id, name) {
+                document.getElementById('deleteClientId').value = id;
+                document.getElementById('deleteClientName').textContent = name;
+                document.getElementById('deleteModal').classList.add('open');
+            };
+
+            document.getElementById('addClientBtn').addEventListener('click', function() {
+                document.getElementById('modalTitle').textContent = 'Kunde anlegen';
+                document.getElementById('editClientId').value = '';
+                document.getElementById('clientName').value = '';
+                document.getElementById('clientMarketplace').value = 'DE';
+                document.getElementById('modalError').style.display = 'none';
+                document.getElementById('clientModal').classList.add('open');
+            });
+
+            document.getElementById('modalCancel').addEventListener('click', function() {
+                document.getElementById('clientModal').classList.remove('open');
+            });
+
+            document.getElementById('modalSave').addEventListener('click', async function() {
+                var name = document.getElementById('clientName').value.trim();
+                var mp = document.getElementById('clientMarketplace').value;
+                var editId = document.getElementById('editClientId').value;
+
+                if (!name) {
+                    document.getElementById('modalError').textContent = 'Bitte Namen eingeben.';
+                    document.getElementById('modalError').style.display = 'block';
+                    return;
+                }
+
+                if (editId) {
+                    var { error } = await sb.from('vra_clients').update({ name: name, marketplace: mp }).eq('id', editId);
+                    if (error) {
+                        document.getElementById('modalError').textContent = 'Fehler: ' + error.message;
+                        document.getElementById('modalError').style.display = 'block';
+                        return;
+                    }
+                } else {
+                    var { error } = await sb.from('vra_clients').insert({ name: name, marketplace: mp });
+                    if (error) {
+                        document.getElementById('modalError').textContent = 'Fehler: ' + error.message;
+                        document.getElementById('modalError').style.display = 'block';
+                        return;
+                    }
+                }
+
+                document.getElementById('clientModal').classList.remove('open');
+                loadClients();
+            });
+
+            document.getElementById('deleteCancel').addEventListener('click', function() {
+                document.getElementById('deleteModal').classList.remove('open');
+            });
+
+            document.getElementById('deleteConfirm').addEventListener('click', async function() {
+                var id = document.getElementById('deleteClientId').value;
+                await sb.from('vra_data').delete().eq('client_id', id);
+                await sb.from('vra_reports').delete().eq('client_id', id);
+                await sb.from('vra_clients').delete().eq('id', id);
+                document.getElementById('deleteModal').classList.remove('open');
+                loadClients();
+            });
+
+            loadClients();
+        })();
+    </script>
+</body>
+</html>

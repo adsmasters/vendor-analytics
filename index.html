@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Analytics — Login</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f6f8fa; --bg-hover: #eef1f5;
+            --border: #d0d7de; --text-primary: #1f2328; --text-secondary: #656d76;
+            --accent: #3551FF; --accent-hover: #2a41cc;
+            --error: #cf222e; --success: #1a7f37; --success-bg: #dafbe1;
+            --badge-bg: #e8e8e8; --row-border: #e8eaed;
+            --modal-overlay: rgba(0,0,0,0.3);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-hover: #1c2129;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e;
+            --accent: #3551FF; --accent-hover: #2a44dd;
+            --error: #f85149; --success: #3fb950; --success-bg: #0d3320;
+            --badge-bg: #30363d; --row-border: #21262d;
+            --modal-overlay: rgba(0,0,0,0.6);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .login-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 6px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 36px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: var(--accent);
+        }
+        .btn-login {
+            width: 100%;
+            padding: 11px 0;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-login:hover {
+            background: var(--accent-hover);
+        }
+        .error-msg {
+            color: var(--error);
+            font-size: 13px;
+            margin-top: 14px;
+            display: none;
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .theme-toggle:hover { color: var(--text-primary); border-color: var(--text-primary); }
+    </style>
+</head>
+<body>
+    <script>
+        var savedTheme = localStorage.getItem('vra_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <button class="theme-toggle" id="themeToggle" title="Theme wechseln"></button>
+    <div class="login-card">
+        <div class="logo">Vendor Analytics</div>
+        <div class="subtitle">Amazon Retail Analytics</div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="password">Passwort</label>
+                <input type="password" id="password" placeholder="Passwort eingeben" autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn-login">Anmelden</button>
+            <div class="error-msg" id="errorMsg">Falsches Passwort.</div>
+        </form>
+    </div>
+    <script>
+        (function() {
+            var PASS = 'adsmasters2026';
+
+            if (sessionStorage.getItem('vra_auth') === '1') {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+
+            function updateThemeIcon() {
+                var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.getElementById('themeToggle').textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+            }
+            updateThemeIcon();
+
+            document.getElementById('themeToggle').addEventListener('click', function() {
+                var current = document.documentElement.getAttribute('data-theme');
+                var next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('vra_theme', next);
+                updateThemeIcon();
+            });
+
+            document.getElementById('loginForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var pw = document.getElementById('password').value;
+                if (pw === PASS) {
+                    sessionStorage.setItem('vra_auth', '1');
+                    window.location.href = 'dashboard.html';
+                } else {
+                    document.getElementById('errorMsg').style.display = 'block';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
