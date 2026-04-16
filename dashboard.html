@@ -1145,13 +1145,49 @@
                 ? function(ctx) { if (ctx.raw === null) return null; return ctx.dataset.label + ': ' + formatEuro(ctx.raw); }
                 : function(ctx) { if (ctx.raw === null) return null; return ctx.dataset.label + ': ' + formatInt(ctx.raw); };
 
+            // Plugin: draw % change above each bar pair when compare is active
+            var pctPlugin = {
+                id: 'trendPctLabels',
+                afterDatasetsDraw: function(chart) {
+                    if (!hasCompare || datasets.length < 2) return;
+                    var ctx2 = chart.ctx;
+                    var meta0 = chart.getDatasetMeta(0);
+                    var meta1 = chart.getDatasetMeta(1);
+                    ctx2.save();
+                    ctx2.font = 'bold 11px Arial';
+                    ctx2.textAlign = 'center';
+                    ctx2.textBaseline = 'bottom';
+                    mainData.forEach(function(val, i) {
+                        var compVal = compData[i];
+                        if (compVal === null || compVal === 0 || val === null) return;
+                        var pct = ((val - compVal) / Math.abs(compVal)) * 100;
+                        var pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+                        ctx2.fillStyle = pct >= 0 ? '#16a34a' : '#dc2626';
+                        var bar0 = meta0.data[i];
+                        var bar1 = meta1.data[i];
+                        if (!bar0 || !bar1) return;
+                        var x = (bar0.x + bar1.x) / 2;
+                        var y = Math.min(bar0.y, bar1.y) - 5;
+                        // White background for readability
+                        var tw = ctx2.measureText(pctStr).width + 6;
+                        ctx2.fillStyle = 'rgba(255,255,255,0.85)';
+                        ctx2.fillRect(x - tw / 2, y - 14, tw, 16);
+                        ctx2.fillStyle = pct >= 0 ? '#16a34a' : '#dc2626';
+                        ctx2.fillText(pctStr, x, y);
+                    });
+                    ctx2.restore();
+                }
+            };
+
             trendChartInstance = new Chart(canvas, {
                 type: 'bar',
                 data: { labels: labels, datasets: datasets },
+                plugins: [pctPlugin],
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
+                    layout: { padding: { top: hasCompare ? 28 : 10 } },
                     plugins: {
                         legend: { labels: { color: textColor, font: { family: 'Arial', size: 12 } } },
                         tooltip: { callbacks: { label: tooltipCb } }
