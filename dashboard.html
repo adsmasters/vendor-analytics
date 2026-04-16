@@ -1053,11 +1053,16 @@
             var el = document.getElementById('trendSection');
             if (!el) return;
             if (selectedMonths.length === 0) { el.innerHTML = ''; return; }
+            if (!window._trendMetric) window._trendMetric = 'revenue';
 
             el.innerHTML =
                 '<div class="section-card">' +
-                    '<div class="section-header">' +
-                        '<h3>Trend-Analyse ' + infoIcon('trend', 'Trend-Analyse', 'Bestellungsumsatz als Balken und bestellte Einheiten als Linie pro Monat.') + '</h3>' +
+                    '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                        '<h3 style="margin:0;">Trend-Analyse ' + infoIcon('trend', 'Trend-Analyse', 'Vergleich von Hauptperiode und Vergleichsperiode pro Monat.') + '</h3>' +
+                        '<select id="trendMetricSelect" onchange="window._trendMetric=this.value;renderTrendChart();" style="font-size:13px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);cursor:pointer;">' +
+                            '<option value="revenue"' + (window._trendMetric === 'revenue' ? ' selected' : '') + '>Bestellungsumsatz</option>' +
+                            '<option value="units"' + (window._trendMetric === 'units' ? ' selected' : '') + '>Bestellte Einheiten</option>' +
+                        '</select>' +
                     '</div>' +
                     '<div class="section-body">' +
                         '<div class="chart-container" style="max-height:350px;"><canvas id="trendChart"></canvas></div>' +
@@ -1071,139 +1076,93 @@
             var canvas = document.getElementById('trendChart');
             if (!canvas) return;
             if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
+            var metric = window._trendMetric || 'revenue';
 
+            // Main period: short month labels + data
             var labels = [];
-            var revenueData = [];
-            var unitsData = [];
-
+            var mainData = [];
+            var mainYear = selectedMonths.length > 0 ? selectedMonths[0].substring(0, 4) : '';
             selectedMonths.forEach(function(m) {
                 var data = getDataForMonth(m);
-                var ps = data.length > 0 ? data[0].period_start : m;
-                labels.push(monthLabel(ps));
-                revenueData.push(data.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0));
-                unitsData.push(data.reduce(function(s, r) { return s + (r.ordered_units || 0); }, 0));
+                var ps = data.length > 0 ? data[0].period_start : (m + '-01');
+                var d = new Date(ps);
+                labels.push(d.toLocaleDateString('de-DE', { month: 'short' }));
+                if (metric === 'revenue') {
+                    mainData.push(data.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0));
+                } else {
+                    mainData.push(data.reduce(function(s, r) { return s + (r.ordered_units || 0); }, 0));
+                }
             });
 
-            // Comparison period datasets
+            // Comparison period
             var hasCompare = window._compareEnabled && window._compareFrom && window._compareTo;
-            var compMonths = [];
-            var compRevenueData = [];
-            var compUnitsData = [];
+            var compData = [];
+            var compYear = hasCompare ? window._compareFrom.substring(0, 4) : '';
             if (hasCompare) {
-                compMonths = availableMonths.filter(function(m) {
+                var compMonths = availableMonths.filter(function(m) {
                     return m >= window._compareFrom && m <= window._compareTo;
                 });
                 compMonths.forEach(function(m) {
-                    var data = getDataForMonth(m);
-                    compRevenueData.push(data.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0));
-                    compUnitsData.push(data.reduce(function(s, r) { return s + (r.ordered_units || 0); }, 0));
+                    var d = getDataForMonth(m);
+                    if (metric === 'revenue') {
+                        compData.push(d.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0));
+                    } else {
+                        compData.push(d.reduce(function(s, r) { return s + (r.ordered_units || 0); }, 0));
+                    }
                 });
-                // Pad to same length as main period if needed
-                while (compRevenueData.length < labels.length) { compRevenueData.push(null); compUnitsData.push(null); }
-                compRevenueData = compRevenueData.slice(0, labels.length);
-                compUnitsData = compUnitsData.slice(0, labels.length);
+                while (compData.length < labels.length) compData.push(null);
+                compData = compData.slice(0, labels.length);
             }
-
-            // Build compare period label for legend
-            var compFromOpt = hasCompare ? (availableMonths.indexOf(window._compareFrom) >= 0 ? window._compareFrom : null) : null;
-            var compLabel = hasCompare ? (window._compareFrom === window._compareTo
-                ? monthLabel(window._compareFrom + '-01')
-                : monthLabel(window._compareFrom + '-01') + ' – ' + monthLabel(window._compareTo + '-01')) : 'Vergleich';
 
             var textColor = getThemeColor('--text-secondary');
             var gridColor = getThemeColor('--chart-grid');
+            var isRevenue = metric === 'revenue';
 
-            var datasets = [
-                {
-                    label: 'Bestellungsumsatz',
-                    data: revenueData,
-                    backgroundColor: 'rgba(53, 81, 255, 0.75)',
-                    borderColor: '#3551FF',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    yAxisID: 'y',
-                    order: 2
-                },
-                {
-                    label: 'Bestellte Einheiten',
-                    data: unitsData,
-                    type: 'line',
-                    borderColor: '#e85d04',
-                    backgroundColor: 'rgba(232, 93, 4, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#e85d04',
-                    tension: 0.3,
-                    fill: false,
-                    yAxisID: 'y1',
-                    order: 1
-                }
-            ];
+            var datasets = [{
+                label: isRevenue ? 'Bestellungsumsatz ' + mainYear : 'Bestellte Einheiten ' + mainYear,
+                data: mainData,
+                backgroundColor: isRevenue ? 'rgba(53, 81, 255, 0.75)' : 'rgba(53, 81, 255, 0.75)',
+                borderColor: isRevenue ? '#3551FF' : '#3551FF',
+                borderWidth: 1,
+                borderRadius: 4
+            }];
 
             if (hasCompare) {
                 datasets.push({
-                    label: 'Umsatz Vorjahr (' + compLabel + ')',
-                    data: compRevenueData,
-                    backgroundColor: 'rgba(53, 81, 255, 0.2)',
-                    borderColor: 'rgba(53, 81, 255, 0.5)',
+                    label: isRevenue ? 'Bestellungsumsatz ' + compYear : 'Bestellte Einheiten ' + compYear,
+                    data: compData,
+                    backgroundColor: 'rgba(53, 81, 255, 0.22)',
+                    borderColor: 'rgba(53, 81, 255, 0.45)',
                     borderWidth: 1,
-                    borderRadius: 4,
-                    borderDash: [],
-                    yAxisID: 'y',
-                    order: 3
-                });
-                datasets.push({
-                    label: 'Einheiten Vorjahr (' + compLabel + ')',
-                    data: compUnitsData,
-                    type: 'line',
-                    borderColor: 'rgba(232, 93, 4, 0.45)',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [5, 4],
-                    pointRadius: 3,
-                    pointBackgroundColor: 'rgba(232, 93, 4, 0.45)',
-                    tension: 0.3,
-                    fill: false,
-                    yAxisID: 'y1',
-                    order: 0
+                    borderRadius: 4
                 });
             }
 
+            var yTickCb = isRevenue
+                ? function(v) { return formatEuro(v); }
+                : function(v) { return formatInt(v); };
+            var tooltipCb = isRevenue
+                ? function(ctx) { if (ctx.raw === null) return null; return ctx.dataset.label + ': ' + formatEuro(ctx.raw); }
+                : function(ctx) { if (ctx.raw === null) return null; return ctx.dataset.label + ': ' + formatInt(ctx.raw); };
+
             trendChartInstance = new Chart(canvas, {
                 type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: datasets
-                },
+                data: { labels: labels, datasets: datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { labels: { color: textColor, font: { family: 'Arial', size: 12 } } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) {
-                                    if (ctx.raw === null) return null;
-                                    if (ctx.dataset.yAxisID === 'y') return ctx.dataset.label + ': ' + formatEuro(ctx.raw);
-                                    return ctx.dataset.label + ': ' + formatInt(ctx.raw);
-                                }
-                            }
-                        }
+                        tooltip: { callbacks: { label: tooltipCb } }
                     },
                     scales: {
                         x: { ticks: { color: textColor, font: { family: 'Arial', size: 11 } }, grid: { color: gridColor } },
                         y: {
                             type: 'linear', position: 'left',
-                            ticks: { color: textColor, font: { family: 'Arial', size: 11 }, callback: function(v) { return formatEuro(v); } },
+                            ticks: { color: textColor, font: { family: 'Arial', size: 11 }, callback: yTickCb },
                             grid: { color: gridColor },
-                            title: { display: true, text: 'Umsatz (' + activeCurrency + ')', color: textColor, font: { family: 'Arial', size: 12 } }
-                        },
-                        y1: {
-                            type: 'linear', position: 'right',
-                            ticks: { color: textColor, font: { family: 'Arial', size: 11 }, callback: function(v) { return formatInt(v); } },
-                            grid: { drawOnChartArea: false },
-                            title: { display: true, text: 'Einheiten', color: textColor, font: { family: 'Arial', size: 12 } }
+                            title: { display: true, text: isRevenue ? 'Umsatz (' + activeCurrency + ')' : 'Einheiten', color: textColor, font: { family: 'Arial', size: 12 } }
                         }
                     }
                 }
