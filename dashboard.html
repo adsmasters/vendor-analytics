@@ -1084,39 +1084,96 @@
                 unitsData.push(data.reduce(function(s, r) { return s + (r.ordered_units || 0); }, 0));
             });
 
+            // Comparison period datasets
+            var hasCompare = window._compareEnabled && window._compareFrom && window._compareTo;
+            var compMonths = [];
+            var compRevenueData = [];
+            var compUnitsData = [];
+            if (hasCompare) {
+                compMonths = availableMonths.filter(function(m) {
+                    return m >= window._compareFrom && m <= window._compareTo;
+                });
+                compMonths.forEach(function(m) {
+                    var data = getDataForMonth(m);
+                    compRevenueData.push(data.reduce(function(s, r) { return s + (r.ordered_revenue || 0); }, 0));
+                    compUnitsData.push(data.reduce(function(s, r) { return s + (r.ordered_units || 0); }, 0));
+                });
+                // Pad to same length as main period if needed
+                while (compRevenueData.length < labels.length) { compRevenueData.push(null); compUnitsData.push(null); }
+                compRevenueData = compRevenueData.slice(0, labels.length);
+                compUnitsData = compUnitsData.slice(0, labels.length);
+            }
+
+            // Build compare period label for legend
+            var compFromOpt = hasCompare ? (availableMonths.indexOf(window._compareFrom) >= 0 ? window._compareFrom : null) : null;
+            var compLabel = hasCompare ? (window._compareFrom === window._compareTo
+                ? monthLabel(window._compareFrom + '-01')
+                : monthLabel(window._compareFrom + '-01') + ' – ' + monthLabel(window._compareTo + '-01')) : 'Vergleich';
+
             var textColor = getThemeColor('--text-secondary');
             var gridColor = getThemeColor('--chart-grid');
+
+            var datasets = [
+                {
+                    label: 'Bestellungsumsatz',
+                    data: revenueData,
+                    backgroundColor: 'rgba(53, 81, 255, 0.75)',
+                    borderColor: '#3551FF',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'Bestellte Einheiten',
+                    data: unitsData,
+                    type: 'line',
+                    borderColor: '#e85d04',
+                    backgroundColor: 'rgba(232, 93, 4, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#e85d04',
+                    tension: 0.3,
+                    fill: false,
+                    yAxisID: 'y1',
+                    order: 1
+                }
+            ];
+
+            if (hasCompare) {
+                datasets.push({
+                    label: 'Umsatz Vorjahr (' + compLabel + ')',
+                    data: compRevenueData,
+                    backgroundColor: 'rgba(53, 81, 255, 0.2)',
+                    borderColor: 'rgba(53, 81, 255, 0.5)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    borderDash: [],
+                    yAxisID: 'y',
+                    order: 3
+                });
+                datasets.push({
+                    label: 'Einheiten Vorjahr (' + compLabel + ')',
+                    data: compUnitsData,
+                    type: 'line',
+                    borderColor: 'rgba(232, 93, 4, 0.45)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [5, 4],
+                    pointRadius: 3,
+                    pointBackgroundColor: 'rgba(232, 93, 4, 0.45)',
+                    tension: 0.3,
+                    fill: false,
+                    yAxisID: 'y1',
+                    order: 0
+                });
+            }
 
             trendChartInstance = new Chart(canvas, {
                 type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [
-                        {
-                            label: 'Bestellungsumsatz',
-                            data: revenueData,
-                            backgroundColor: 'rgba(53, 81, 255, 0.7)',
-                            borderColor: '#3551FF',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                            yAxisID: 'y',
-                            order: 2
-                        },
-                        {
-                            label: 'Bestellte Einheiten',
-                            data: unitsData,
-                            type: 'line',
-                            borderColor: '#e85d04',
-                            backgroundColor: 'rgba(232, 93, 4, 0.1)',
-                            borderWidth: 2,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#e85d04',
-                            tension: 0.3,
-                            fill: false,
-                            yAxisID: 'y1',
-                            order: 1
-                        }
-                    ]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -1127,6 +1184,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(ctx) {
+                                    if (ctx.raw === null) return null;
                                     if (ctx.dataset.yAxisID === 'y') return ctx.dataset.label + ': ' + formatEuro(ctx.raw);
                                     return ctx.dataset.label + ': ' + formatInt(ctx.raw);
                                 }
